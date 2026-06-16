@@ -21,6 +21,7 @@ __wb_paint() {
   WB_LBL=$'\e[1m\e[38;5;111m'   # bold cornflower — name column (CPU/GPU/…), pops, not yellow
   WB_DEV=$'\e[38;5;180m'        # warm tan — device-name column (i7-6700HQ / GTX 1060)
   WB_GOLD=$'\e[1m\e[38;5;220m'  # bold gold — major section dividers
+  WB_NEON_ORANGE=$'\e[1m\e[38;5;208m'  # bold neon orange — Dawid nameplate
   WB_FR=$'\e[22;24;39m'         # fg-only reset: clears bold/underline/colour but KEEPS the row's zebra bg
   WB_DM=$'\006'                 # sentinel for "adaptive dim grey" — __wb_zrow swaps it per stripe so it stays readable on both shades
 }
@@ -158,7 +159,7 @@ __wb_greeting_row() {
   up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/,//g' || echo '?')
   now=$(date '+%a %d %b · %H:%M')
   __wb_plainrow ""
-  __wb_plainrow "${WB_HDR}${hello}, ${WB_GOLD}DAWID${WB_FR}${WB_HDR}.${WB_R} ${WB_WHT}${msg}${WB_R}"
+  __wb_plainrow "${WB_HDR}${hello}, ${WB_NEON_ORANGE}DAWID${WB_FR}${WB_HDR}.${WB_R} ${WB_WHT}${msg}${WB_R}"
   __wb_plainrow "${WB_DM}up ${up} · ${now}"
 }
 
