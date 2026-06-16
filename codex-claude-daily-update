@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Daily Claude Code + Codex updater with same-day shell notification.
+
+Cron runs the update path. Interactive shells call --notify-shell from ~/.bashrc.
+The notification reads the saved JSON receipt, so opening many terminals does not
+rerun any updater commands.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+
+STATE_DIR = Path.home() / ".AGENTS" / ".state"
+STATE_PATH = Path(
+    os.environ.get(
+        "CODEX_CLAUDE_UPDATE_STATE",
+        str(STATE_DIR / "codex-claude-daily-update.json"),
+    )
+)
+LOG_PATH = Path(
+    os.environ.get(
+        "CODEX_CLAUDE_UPDATE_LOG",
+        str(Path.home() / ".AGENTS" / "logs" / "codex-claude-daily-update.log"),
+    )
+)
+
+DEFAULT_PATH = ":".join(
+    [
+        str(Path.home() / ".npm-global" / "bin"),
+        str(Path.home() / ".local" / "bin"),
+        "/home/linuxbrew/.linuxbrew/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+    ]
+)
+
+TOOLS = [
+    {
+        "key": "claude",
+        "label": "Claude",
+        "version_cmd": ["claude", "--version"],
+        "update_cmd": ["claude", "update"],
+    },
+    {
+        "key": "codex",
+        "label": "Codex",
+        "version_cmd": ["codex", "--version"],
+        "update_cmd": ["npm", "install", "-g", "@openai/codex@latest"],
+    },
+]
+
+
+def _env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PATH"] = DEFAULT_PATH + ":" + env.get("PATH", "")
+    env.setdefault("NPM_CONFIG_PREFIX", str(Path.home() / ".npm-global"))
+    env.setdefault("HOME", str(Path.home()))
+    return env
+
+
+def _run(cmd: list[str], timeout: int = 900) -> dict[str, Any]:
+    started = datetime.now().astimezone().isoformat()
+    try:
+        proc = subprocess.run(
+            cmd,
+            env=_env(),
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+        return {
+            "cmd": cmd,
+            "started": started,
+            "returncode": proc.returncode,
+            "stdout": proc.stdout.strip(),
+            "stderr": proc.stderr.strip(),
+        }
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "cmd": cmd,
+            "started": started,
+            "returncode": 124,
+            "stdout": (exc.stdout or "").strip() if isinstance(exc.stdout, str) else "",
+            "stderr": "timed out",
+        }
+
+
+def _version(tool: dict[str, Any]) -> str | None:
+    result = _run(tool["version_cmd"], timeout=60)
+    text = "\n".join(part for part in [result["stdout"], result["stderr"]] if part)
+    if result["returncode"] != 0 or not text.strip():
+        return None
+    return _first_version(text) or text.strip().splitlines()[0].strip()
+
+
+def _first_version(text: str) -> str | None:
+    match = re.search(r"\d+(?:\.\d+)+(?:[-+][0-9A-Za-z.-]+)?", text)
+    return match.group(0) if match else None
+
+
+def _append_log(receipt: dict[str, Any]) -> None:
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_PATH.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(receipt, ensure_ascii=False) + "\n")
+
+
+def _write_state(receipt: dict[str, Any]) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = STATE_PATH.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(receipt, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.replace(STATE_PATH)
+
+
+def run_daily_update() -> int:
+    """Run both updaters and persist a receipt when either version changes."""
+    receipt: dict[str, Any] = {
+        "date": date.today().isoformat(),
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "tools": [],
+        "updated": [],
+    }
+    exit_code = 0
+
+    for tool in TOOLS:
+        before = _version(tool)
+        update_result = _run(tool["update_cmd"])
+        after = _version(tool)
+        changed = bool(before and after and before != after)
+        entry = {
+            "key": tool["key"],
+            "label": tool["label"],
+            "before": before,
+            "after": after,
+            "changed": changed,
+            "update_returncode": update_result["returncode"],
+            "update_stdout_tail": "\n".join(update_result["stdout"].splitlines()[-12:]),
+            "update_stderr_tail": "\n".join(update_result["stderr"].splitlines()[-12:]),
+        }
+        receipt["tools"].append(entry)
+        if changed:
+            receipt["updated"].append(entry)
+        if update_result["returncode"] != 0:
+            exit_code = update_result["returncode"] or 1
+
+    _append_log(receipt)
+    if receipt["updated"]:
+        _write_state(receipt)
+    return exit_code
+
+
+def _load_state() -> dict[str, Any] | None:
+    try:
+        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+
+def _relative_day_label(update_date: date) -> str | None:
+    today = date.today()
+    if update_date == today:
+        return "TODAY"
+    if update_date == today - timedelta(days=1):
+        return "YESTERDAY"
+    return None
+
+
+def notify_shell() -> int:
+    """Print colored update confirmation for today and yesterday only."""
+    state = _load_state()
+    if not state or not state.get("updated"):
+        return 0
+
+    try:
+        update_date = date.fromisoformat(str(state["date"]))
+    except (KeyError, ValueError):
+        return 0
+
+    day_label = _relative_day_label(update_date)
+    if not day_label:
+        return 0
+
+    cream = "\033[38;5;230m"
+    teal = "\033[38;5;50m"
+    orange = "\033[38;5;214m"
+    green = "\033[38;5;118m"
+    purple = "\033[38;5;183m"
+    dim = "\033[38;5;245m"
+    reset = "\033[0m"
+    bold = "\033[1m"
+
+    rows = []
+    title_plain = f"{day_label}: agent CLI update confirmation ({update_date.isoformat()})"
+    title_color = (
+        f"{purple}{bold}{day_label}:{reset} "
+        f"{cream}agent CLI update confirmation {dim}({update_date.isoformat()}){reset}"
+    )
+    rows.append((title_plain, title_color))
+    for entry in state["updated"]:
+        label = str(entry.get("label") or entry.get("key") or "Tool")
+        before = str(entry.get("before") or "unknown")
+        after = str(entry.get("after") or "unknown")
+        plain = f"Updated {label} from {before} to {after}"
+        colored = (
+            f"{cream}Updated {teal}{bold}{label}{reset}{cream} "
+            f"from {orange}{before}{cream} to {green}{bold}{after}{reset}"
+        )
+        rows.append((plain, colored))
+
+    width = max(len(plain) for plain, _ in rows) + 4
+    border = "+" + "-" * width + "+"
+    welcome_board_width = 80
+    welcome_board_left_pad = 2
+    indent = " " * max(0, welcome_board_left_pad + (welcome_board_width - len(border)) // 2)
+
+    print(f"{indent}{teal}{border}{reset}")
+    for plain, colored in rows:
+        pad = " " * (width - len(plain) - 2)
+        print(f"{indent}{teal}|{reset} {colored}{pad} {teal}|{reset}")
+    print(f"{indent}{teal}{border}{reset}")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--notify-shell", action="store_true", help="print today/yesterday update banner")
+    parser.add_argument("--state-path", action="store_true", help="print the JSON state path")
+    args = parser.parse_args(argv)
+
+    if args.notify_shell:
+        return notify_shell()
+    if args.state_path:
+        print(STATE_PATH)
+        return 0
+    return run_daily_update()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
