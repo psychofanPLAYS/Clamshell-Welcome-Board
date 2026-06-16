@@ -44,8 +44,8 @@ __wb_hdr() {
     rule=$(( WB_FRAME_INNER - ${#lbl} - 4 )); ((rule < 4)) && rule=4
     __wb_plainrow ""
     __wb_plainrow ""
-    printf '  %s╞══ %s %s╡%s\n' \
-      "$WB_GOLD" "$lbl" "$(__wb_repeat '═' "$rule")" "$WB_R"
+    printf '  %s╞══ %s%s%s %s╡%s\n' \
+      "$WB_AC" "$WB_GOLD" "$lbl" "$WB_FR$WB_AC" "$(__wb_repeat '═' "$rule")" "$WB_R"
     __wb_plainrow ""
     return
   fi
