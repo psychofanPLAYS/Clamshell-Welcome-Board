@@ -57,18 +57,75 @@ __wb_row() { printf '   %b\n' "$1"; }       # indented body row
 __wb_lbl() { printf '%s%-11s%s' "$WB_GRY" "$1" "$WB_R"; }   # fixed grey label col
 
 # ---- time-aware rotating greeting (first name only, never surname) ----------
-__wb_greeting() {
-  local h; h=$((10#$(date +%H))); local -a p
-  if   [ "$h" -ge 5 ] && [ "$h" -lt 12 ]; then
-    p=("Good morning, Dawid." "Morning, Dawid — CLAMSHELL held all night." "Good morning, Dawid. Standing by.")
+__wb_pick() {
+  local -n choices=$1
+  printf '%s' "${choices[RANDOM % ${#choices[@]}]}"
+}
+__wb_greeting_parts() {
+  local h; h=$((10#$(date +%H)))
+  local -a hello msg
+  if [ "$h" -ge 5 ] && [ "$h" -lt 12 ]; then
+    hello=(
+      "Good morning" "Morning" "Rise and shine" "Welcome back" "Hello"
+      "Fresh boot energy" "New day online" "Command deck awake"
+      "Systems are up" "Ready for the morning run" "Bright morning"
+      "Early console, clear signal"
+    )
+    msg=(
+      "the board is awake." "coffee-mode systems are green."
+      "fresh signal, clean start." "today is ready to be shaped."
+      "your command deck is warm." "quiet systems, sharp tools."
+      "we have a clean runway." "small steps, heavy hits."
+      "focus lane is open." "the shell kept watch."
+      "let's make the morning count." "steady hands, clear screen."
+    )
   elif [ "$h" -ge 12 ] && [ "$h" -lt 17 ]; then
-    p=("Good afternoon, Dawid." "Afternoon, Dawid. At your command." "Welcome back, Dawid.")
+    hello=(
+      "Good afternoon" "Afternoon" "Welcome back" "Hello" "Hi"
+      "Midday check-in" "Console ready" "CLAMSHELL reporting"
+      "Back at the board" "Systems waiting" "Command deck ready"
+      "Afternoon signal locked"
+    )
+    msg=(
+      "the machine is steady." "your tools are lined up."
+      "we are in the work lane." "clean signal, no drama."
+      "everything important is on deck." "the board has your back."
+      "focus mode is available." "ready for the next move."
+      "the shell is warm and listening." "small command, big leverage."
+      "the afternoon is still yours." "we can make this one count."
+    )
   elif [ "$h" -ge 17 ] && [ "$h" -lt 22 ]; then
-    p=("Good evening, Dawid." "Evening, Dawid. Ready when you are." "Good evening, Dawid. Standing by.")
+    hello=(
+      "Good evening" "Evening" "Welcome back" "Hello" "Night desk warming"
+      "Late-day systems ready" "Evening console online" "CLAMSHELL standing by"
+      "Back for the evening run" "Signal still clean" "Command deck lit"
+      "Evening watch is live"
+    )
+    msg=(
+      "steady lights, sharp tools." "the day still has room."
+      "we can land this clean." "quiet power, clear path."
+      "your board is still awake." "the evening lane is open."
+      "no rush, just good moves." "systems are calm and ready."
+      "let's close the loop." "the shell is holding steady."
+      "one clean pass at a time." "bring the next idea in."
+    )
   else
-    p=("Working late, Dawid." "Late night, Dawid — standing by." "Still here, Dawid.")
+    hello=(
+      "Working late" "Late night" "Night shift" "Still here" "Hello"
+      "Moonlight console" "After-hours deck" "Quiet-hours signal"
+      "CLAMSHELL night watch" "Late console online" "Midnight systems ready"
+      "Night lane open"
+    )
+    msg=(
+      "low noise, high focus." "the quiet hours are yours."
+      "steady screen, steady mind." "we keep it gentle and sharp."
+      "night mode is holding." "the shell is still with you."
+      "one careful move at a time." "dim lights, clear signal."
+      "we can keep this simple." "the machine is calm."
+      "no rush in the dark." "soft focus, strong hands."
+    )
   fi
-  printf '%s' "${p[RANDOM % ${#p[@]}]}"
+  printf '%s\t%s' "$(__wb_pick hello)" "$(__wb_pick msg)"
 }
 
 # ---- BANNER (brand mark so SSH login ≠ macOS login) ------------------------
@@ -96,8 +153,13 @@ __wb_banner() {
   printf '  %s%s%s\n' "$WB_HDR" "$binary" "$WB_R"
 }
 __wb_greeting_row() {
+  local parts hello msg up now
+  IFS=$'\t' read -r hello msg < <(__wb_greeting_parts)
+  up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/,//g' || echo '?')
+  now=$(date '+%a %d %b · %H:%M')
   __wb_plainrow ""
-  __wb_plainrow "${WB_HDR}$(__wb_greeting)${WB_R} ${WB_DM}· up $(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/,//g' || echo '?') · $(date '+%a %d %b · %H:%M')"
+  __wb_plainrow "${WB_HDR}${hello}, ${WB_GOLD}DAWID${WB_FR}${WB_HDR}.${WB_R} ${WB_WHT}${msg}${WB_R}"
+  __wb_plainrow "${WB_DM}up ${up} · ${now}"
 }
 
 # ---- GENERIC SHADED TABLE (reusable across sections) -----------------------
