@@ -56,6 +56,7 @@ Optional final spacing after all startup output:
 ```bash
 bash -n welcome-board.sh
 python3 -m py_compile codex-claude-daily-update
+python3 -m unittest discover -s tests -v
 ```
 
 Render a plain preview:

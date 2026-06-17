@@ -13,18 +13,17 @@ import json
 import os
 import re
 import subprocess
-import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 
-def _history_days() -> int:
+def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int:
     try:
-        value = int(os.environ.get("CODEX_CLAUDE_UPDATE_HISTORY_DAYS", "7"))
+        value = int(os.environ.get(name, str(default)))
     except ValueError:
-        return 7
-    return max(1, min(value, 30))
+        return default
+    return max(minimum, min(value, maximum))
 
 
 STATE_DIR = Path.home() / ".AGENTS" / ".state"
@@ -40,7 +39,13 @@ LOG_PATH = Path(
         str(Path.home() / ".AGENTS" / "logs" / "codex-claude-daily-update.log"),
     )
 )
-HISTORY_DAYS = _history_days()
+HISTORY_DAYS = _bounded_env_int("CODEX_CLAUDE_UPDATE_HISTORY_DAYS", 7, 1, 30)
+MAX_LOG_READ_BYTES = _bounded_env_int(
+    "CODEX_CLAUDE_UPDATE_MAX_LOG_READ_BYTES",
+    1_048_576,
+    4_096,
+    10_485_760,
+)
 
 DEFAULT_PATH = ":".join(
     [
@@ -184,6 +189,10 @@ def _relative_day_label(update_date: date) -> str | None:
     return None
 
 
+def _day_word(days: int) -> str:
+    return "day" if days == 1 else "days"
+
+
 def _display_day_label(update_date: date) -> str:
     return _relative_day_label(update_date) or update_date.strftime("%b %d").upper()
 
@@ -204,13 +213,25 @@ def _parse_receipt_time(receipt: dict[str, Any]) -> str:
     return parsed.astimezone().strftime("%H:%M")
 
 
-def _iter_log_receipts() -> list[dict[str, Any]]:
-    receipts: list[dict[str, Any]] = []
+def _read_recent_log_lines(max_bytes: int = MAX_LOG_READ_BYTES) -> list[str]:
     try:
-        lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        lines = []
-    for line in lines:
+        with LOG_PATH.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            if size > max_bytes:
+                handle.seek(-max_bytes, os.SEEK_END)
+                handle.readline()
+            else:
+                handle.seek(0)
+            data = handle.read()
+    except OSError:
+        return []
+    return data.decode("utf-8", errors="replace").splitlines()
+
+
+def _iter_log_receipts(max_bytes: int = MAX_LOG_READ_BYTES) -> list[dict[str, Any]]:
+    receipts: list[dict[str, Any]] = []
+    for line in _read_recent_log_lines(max_bytes=max_bytes):
         if not line.strip():
             continue
         try:
@@ -228,7 +249,9 @@ def _receipt_key(receipt: dict[str, Any]) -> tuple[str, str]:
 
 def _load_recent_update_receipts(days: int = HISTORY_DAYS) -> list[dict[str, Any]]:
     """Return changed-version receipts from the rolling N-day window."""
-    cutoff = date.today() - timedelta(days=max(1, days) - 1)
+    window_days = max(1, days)
+    today = date.today()
+    cutoff = today - timedelta(days=window_days - 1)
     receipts = _iter_log_receipts()
     state = _load_state()
     if state and _receipt_key(state) not in {_receipt_key(item) for item in receipts}:
@@ -237,7 +260,7 @@ def _load_recent_update_receipts(days: int = HISTORY_DAYS) -> list[dict[str, Any
     recent: list[dict[str, Any]] = []
     for receipt in receipts:
         receipt_date = _parse_receipt_date(receipt)
-        if not receipt_date or receipt_date < cutoff:
+        if not receipt_date or receipt_date < cutoff or receipt_date > today:
             continue
         if receipt.get("updated"):
             recent.append(receipt)
@@ -262,10 +285,10 @@ def notify_shell() -> int:
     bold = "\033[1m"
 
     rows: list[tuple[str, str]] = []
-    title_plain = f"AGENT CLI UPDATE HISTORY - LAST {HISTORY_DAYS} DAYS"
+    title_plain = f"AGENT CLI UPDATE HISTORY - LAST {HISTORY_DAYS} {_day_word(HISTORY_DAYS).upper()}"
     title_color = (
         f"{purple}{bold}AGENT CLI UPDATE HISTORY{reset} "
-        f"{dim}- last {HISTORY_DAYS} days{reset}"
+        f"{dim}- last {HISTORY_DAYS} {_day_word(HISTORY_DAYS)}{reset}"
     )
     rows.append((title_plain, title_color))
 
@@ -287,6 +310,9 @@ def notify_shell() -> int:
                 f"{orange}{before}{cream} -> {green}{bold}{after}{reset}"
             )
             rows.append((plain, colored))
+
+    if len(rows) == 1:
+        return 0
 
     width = max(len(plain) for plain, _ in rows) + 4
     border = "+" + "-" * width + "+"
