@@ -71,11 +71,14 @@ class MacOSMachineTests(unittest.TestCase):
         self.assertIn("Apple M2", rendered)
         self.assertIn("macOS", rendered)
         self.assertIn("8t", rendered)
-        self.assertIn("PRESSURE", rendered)
+        self.assertIn("CPU", rendered)
+        self.assertIn("GPU", rendered)
+        self.assertIn("MEMORY / DISK", rendered)
         self.assertIn("RAM", rendered)
         self.assertIn("DISK", rendered)
-        self.assertIn("CLOCKS", rendered)
         self.assertIn("not exposed", rendered)
+        self.assertNotIn("PRESSURE", rendered)
+        self.assertNotIn("CLOCKS", rendered)
         self.assertNotIn("/proc", rendered)
 
         framed_rows = [line for line in rendered.splitlines() if line.startswith("  │")]

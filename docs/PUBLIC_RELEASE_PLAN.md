@@ -107,8 +107,8 @@ The current Linux machine row displays:
 - `8t`: eight CPU threads.
 - NVIDIA `P8`: NVIDIA performance state 8, normally a low-power idle state.
 - CPU clock pair: current/max GHz, not base/max. For example, `2.70/3.50 GHz` means the current average is near 2.70 GHz and the kernel reports 3.50 GHz as the max/turbo limit.
-- `GCLK`: graphics clock as current/max MHz.
-- `MCLK`: memory clock as current/max MHz.
+- `CORE`: GPU graphics/core clock as current/max MHz.
+- `MEMCLK`: GPU memory clock as current/max MHz.
 
 For broad user support, the board should detect unavailable GPU data and render `no GPU` instead of failing.
 

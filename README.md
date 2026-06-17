@@ -42,19 +42,22 @@ It is designed for people who want a useful first screen when they open a termin
 See a fuller public-safe render preview in [docs/demo-output.txt](docs/demo-output.txt).
 
 ```text
-PRESSURE
-CPU   ██░░░░░░  32% ▁▁▁▁▁▂▂▃  i7-6700HQ  8t · 2.70/3.50 GHz
-GPU   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  GTX 1060  P8 · 4 W
-VRAM  ███████░  98% ▁▁▁▁▁▇▇▇  6059/6144 MB
-RAM   ████░░░░  55% ▁▁▁▁▁▄▄▄  8.6/16 GB
+CPU
+TEMP   ███░░░░░  45% ▁▁▁▁▁▄▄▄  CPU · 45°C
+USAGE  ██░░░░░░  32% ▁▁▁▁▁▂▂▃  i7-6700HQ  8t · 2.70/3.50 GHz
+LOAD   █░░░░░░░  14% ▁▁▁▁▁▁▂▂   1.10  0.80  0.65 · up 3h 12m
 
-TEMP
-CTEMP ███░░░░░  45% ▁▁▁▁▁▄▄▄  CPU · 45°C
-GTEMP ███░░░░░  38% ▁▁▁▁▁▃▃▃  GPU · 38°C
+GPU
+TEMP   ███░░░░░  38% ▁▁▁▁▁▃▃▃  GPU · 38°C
+CORE   ░░░░░░░░   7% ▁▁▁▁▁▁▁▁  graphics · 139/1911 MHz
+USAGE  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  GTX 1060  P8 · 4 W
+VRAM   ███████░  98% ▁▁▁▁▁▇▇▇  6059/6144 MB
+MEMCLK ░░░░░░░░  10% ▁▁▁▁▁▁▁▁  memory · 405/4004 MHz
 
-CLOCKS
-GCLK  ░░░░░░░░   7% ▁▁▁▁▁▁▁▁  graphics · 139/1911 MHz
-MCLK  ░░░░░░░░  10% ▁▁▁▁▁▁▁▁  memory · 405/4004 MHz
+MEMORY / DISK
+RAM    ████░░░░  55% ▁▁▁▁▁▄▄▄  8.6/16 GB
+SWAP   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  0.0/8 GB
+DISK   ██░░░░░░  20% ▁▁▁▁▁▂▂▂  80/400 GB · root fs
 ```
 
 How to read the machine rows:
@@ -62,8 +65,8 @@ How to read the machine rows:
 - `8t` means eight CPU threads/logical CPUs.
 - NVIDIA `P8` is a GPU performance state, usually a low-power idle state.
 - The CPU clock pair is current/max GHz. On an i7-6700HQ, for example, `2.70/3.50 GHz` means the current average is near 2.70 GHz and the kernel reports a 3.50 GHz max/turbo limit.
-- `CTEMP` and `GTEMP` are CPU and GPU temperatures.
-- `GCLK` and `MCLK` are GPU graphics and memory clocks as current/max MHz.
+- `TEMP` is scoped by its group: CPU temperature under `CPU`, GPU temperature under `GPU`.
+- `CORE` and `MEMCLK` are GPU graphics and memory clocks as current/max MHz.
 
 ## First Run
 

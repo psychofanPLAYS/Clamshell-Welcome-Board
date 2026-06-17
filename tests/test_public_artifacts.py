@@ -16,8 +16,10 @@ class PublicArtifactsTests(unittest.TestCase):
         self.assertTrue(demo_path.exists(), "docs/demo-output.txt should show a public-safe render preview")
 
         demo = demo_path.read_text(encoding="utf-8")
-        for expected in ("WORKSTATION", "PRESSURE", "TEMP", "CLOCKS", "TMUX", "COMMANDS"):
+        for expected in ("WORKSTATION", "CPU", "GPU", "MEMORY / DISK", "TMUX", "COMMANDS"):
             self.assertIn(expected, demo)
+        for stale_heading in ("PRESSURE", "CLOCKS"):
+            self.assertNotIn(stale_heading, demo)
         forbidden_values = (
             "claw" + "ski",
             "Da" + "wid",

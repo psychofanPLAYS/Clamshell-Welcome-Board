@@ -324,7 +324,7 @@ __wb_tcol() { local t="${1:-0}"; [[ "$t" =~ ^[0-9]+$ ]] || { printf '%s' "$WB_GR
 __wb_mrow() {
   local c graph="$3"
   [ -z "$graph" ] && graph="▁▁▁▁▁▁▁▁"
-  c="${WB_LBL}$(printf '%-5s' "$1")${WB_FR} $(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-?}")%${WB_FR} ${WB_CYN}${graph}${WB_FR}  $4"
+  c="${WB_LBL}$(printf '%-6s' "$1")${WB_FR} $(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-?}")%${WB_FR} ${WB_CYN}${graph}${WB_FR}  $4"
   __wb_zrow "$c"
 }
 __wb_msub() {
@@ -339,8 +339,8 @@ __wb_center() {
 __wb_loadrow() {
   local pct="$1" l1="$2" l5="$3" l15="$4" up="$5" graph="$6" c labels
   [ -z "$graph" ] && graph="▁▁▁▁▁▁▁▁"
-  c="${WB_LBL}$(printf '%-5s' 'LOAD')${WB_FR} $(__wb_bar "$pct") ${WB_B}${WB_WHT}$(printf '%3s' "${pct:-0}")%${WB_FR} ${WB_CYN}${graph}${WB_FR}  ${WB_WHT}$(printf '%5s %5s %5s' "${l1:-?}" "${l5:-?}" "${l15:-?}")${WB_DM} · up ${up:-?}"
-  labels="${WB_D}$(printf '%30s' '')${WB_WHT}$(__wb_center 5 '1m') $(__wb_center 5 '5m') $(__wb_center 5 '15m')${WB_R}"
+  c="${WB_LBL}$(printf '%-6s' 'LOAD')${WB_FR} $(__wb_bar "$pct") ${WB_B}${WB_WHT}$(printf '%3s' "${pct:-0}")%${WB_FR} ${WB_CYN}${graph}${WB_FR}  ${WB_WHT}$(printf '%5s %5s %5s' "${l1:-?}" "${l5:-?}" "${l15:-?}")${WB_DM} · up ${up:-?}"
+  labels="${WB_D}$(printf '%31s' '')${WB_WHT}$(__wb_center 5 '1m') $(__wb_center 5 '5m') $(__wb_center 5 '15m')${WB_R}"
   __wb_zrow "$c"
   __wb_plainrow "$labels"
 }
@@ -440,20 +440,20 @@ __wb_machine_macos() {
   lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{if(n<1)n=1; p=x/n*100; if(p>100)p=100; printf "%d", p}')
   up=$(uptime 2>/dev/null | sed -E 's/^.* up  *//; s/, *[0-9]+ users?.*$//; s/load averages?:.*$//; s/  */ /g; s/,$//')
 
-  __wb_msub "PRESSURE"
-  __wb_mrow "CPU"  "${lpct:-0}" "$(__wb_hist_graph cpu "${lpct:-0}")" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}macOS"
-  __wb_mrow "GPU"  "0"          "$(__wb_hist_graph gpu 0)" "${WB_DEV}Apple/Metal GPU${WB_DM} · not exposed"
-  __wb_mrow "VRAM" "0"          "$(__wb_hist_graph vram 0)" "${WB_DM}shared memory on Apple/Metal systems"
+  __wb_msub "CPU"
+  __wb_mrow "TEMP"  "0"          "$(__wb_hist_graph ctemp 0)" "${WB_DEV}CPU${WB_DM} · not exposed"
+  __wb_mrow "USAGE" "${lpct:-0}" "$(__wb_hist_graph cpu "${lpct:-0}")" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}macOS"
+  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
+  __wb_msub "GPU"
+  __wb_mrow "TEMP"  "0"          "$(__wb_hist_graph gtemp 0)" "${WB_DEV}GPU${WB_DM} · not exposed"
+  __wb_mrow "CORE"  "0"          "$(__wb_hist_graph gclk 0)" "${WB_DEV}graphics${WB_DM} · not exposed"
+  __wb_mrow "USAGE" "0"          "$(__wb_hist_graph gpu 0)" "${WB_DEV}Apple/Metal GPU${WB_DM} · not exposed"
+  __wb_mrow "VRAM"  "0"          "$(__wb_hist_graph vram 0)" "${WB_DM}shared memory on Apple/Metal systems"
+  __wb_mrow "MEMCLK" "0"         "$(__wb_hist_graph mclk 0)" "${WB_DEV}memory${WB_DM} · not exposed"
+  __wb_msub "MEMORY / DISK"
   __wb_mrow "RAM"  "${rpct:-0}" "$(__wb_hist_graph ram "${rpct:-0}")" "$(__wb_grad "${rpct:-0}")${used_gb}${WB_DM}/${total_gb} GB"
   __wb_mrow "SWAP" "0"          "$(__wb_hist_graph swap 0)" "${WB_DM}macOS manages swap dynamically"
   __wb_mrow "DISK" "${dp:-0}"   "$(__wb_hist_graph disk "${dp:-0}")" "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root fs"
-  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
-  __wb_msub "TEMP"
-  __wb_mrow "CTEMP" "0" "$(__wb_hist_graph ctemp 0)" "${WB_DEV}CPU${WB_DM} · not exposed"
-  __wb_mrow "GTEMP" "0" "$(__wb_hist_graph gtemp 0)" "${WB_DEV}GPU${WB_DM} · not exposed"
-  __wb_msub "CLOCKS"
-  __wb_mrow "GCLK" "0" "$(__wb_hist_graph gclk 0)" "${WB_DEV}graphics${WB_DM} · not exposed"
-  __wb_mrow "MCLK" "0" "$(__wb_hist_graph mclk 0)" "${WB_DEV}memory${WB_DM} · not exposed"
 }
 
 # ---- MACHINE (full geek panel: aligned gauges + every pollable stat) --------
@@ -501,20 +501,20 @@ __wb_machine() {
   stGB=$(awk -v t="${stot:-0}" 'BEGIN{printf "%.0f", t/1024}')
   # --- render: gauges align in one column; in each used/total pair the USED
   #     value is bright/gradient and the TOTAL is dim, so the two never blend ---
-  __wb_msub "PRESSURE"
-  __wb_mrow "CPU"  "${cbusy:-0}" "$(__wb_hist_graph cpu "${cbusy:-0}")" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz"
-  __wb_mrow "GPU"  "${gutil:-0}" "$(__wb_hist_graph gpu "${gutil:-0}")" "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${gpw:-?}${WB_DM} W"
-  __wb_mrow "VRAM" "${vpct}"     "$(__wb_hist_graph vram "${vpct:-0}")" "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB"
+  __wb_msub "CPU"
+  __wb_mrow "TEMP"  "$(__wb_pct "${ctemp:-0}")" "$(__wb_hist_graph ctemp "${ctemp:-0}")" "${WB_DEV}CPU${WB_DM} · ${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}°C"
+  __wb_mrow "USAGE" "${cbusy:-0}" "$(__wb_hist_graph cpu "${cbusy:-0}")" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz"
+  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
+  __wb_msub "GPU"
+  __wb_mrow "TEMP"  "$(__wb_pct "${gtemp:-0}")" "$(__wb_hist_graph gtemp "${gtemp:-0}")" "${WB_DEV}GPU${WB_DM} · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C"
+  __wb_mrow "CORE" "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_DEV}graphics${WB_DM} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
+  __wb_mrow "USAGE" "${gutil:-0}" "$(__wb_hist_graph gpu "${gutil:-0}")" "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${gpw:-?}${WB_DM} W"
+  __wb_mrow "VRAM"  "${vpct}"     "$(__wb_hist_graph vram "${vpct:-0}")" "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB"
+  __wb_mrow "MEMCLK" "$mclk_pct" "$(__wb_hist_graph mclk "$mclk_pct")" "${WB_DEV}memory${WB_DM} · ${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
+  __wb_msub "MEMORY / DISK"
   __wb_mrow "RAM"  "${rpct}"     "$(__wb_hist_graph ram "${rpct:-0}")" "$(__wb_grad "$rpct")${ruGB}${WB_DM}/${rtGB} GB"
   __wb_mrow "SWAP" "${spct}"     "$(__wb_hist_graph swap "${spct:-0}")" "$(__wb_grad "$spct")${suGB}${WB_DM}/${stGB} GB"
   __wb_mrow "DISK" "${dp:-0}"    "$(__wb_hist_graph disk "${dp:-0}")" "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root fs"
-  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
-  __wb_msub "TEMP"
-  __wb_mrow "CTEMP" "$(__wb_pct "${ctemp:-0}")" "$(__wb_hist_graph ctemp "${ctemp:-0}")" "${WB_DEV}CPU${WB_DM} · ${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}°C"
-  __wb_mrow "GTEMP" "$(__wb_pct "${gtemp:-0}")" "$(__wb_hist_graph gtemp "${gtemp:-0}")" "${WB_DEV}GPU${WB_DM} · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C"
-  __wb_msub "CLOCKS"
-  __wb_mrow "GCLK" "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_DEV}graphics${WB_DM} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
-  __wb_mrow "MCLK" "$mclk_pct" "$(__wb_hist_graph mclk "$mclk_pct")" "${WB_DEV}memory${WB_DM} · ${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
 }
 
 # ---- NETWORK (local VPN/SSH glance, no hardcoded machines) -----------------
