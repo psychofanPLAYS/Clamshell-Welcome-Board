@@ -340,7 +340,7 @@ __wb_loadrow() {
   local pct="$1" l1="$2" l5="$3" l15="$4" up="$5" graph="$6" c labels
   [ -z "$graph" ] && graph="▁▁▁▁▁▁▁▁"
   c="${WB_LBL}$(printf '%-5s' 'LOAD')${WB_FR} $(__wb_bar "$pct") ${WB_B}${WB_WHT}$(printf '%3s' "${pct:-0}")%${WB_FR} ${WB_CYN}${graph}${WB_FR}  ${WB_WHT}$(printf '%5s %5s %5s' "${l1:-?}" "${l5:-?}" "${l15:-?}")${WB_DM} · up ${up:-?}"
-  labels="${WB_D}$(printf '%21s' '')(${WB_WHT}1m${WB_D}) · (${WB_WHT}5m${WB_D}) · (${WB_WHT}15m${WB_D})${WB_R}"
+  labels="${WB_D}$(printf '%30s' '')${WB_WHT}$(__wb_center 5 '1m') $(__wb_center 5 '5m') $(__wb_center 5 '15m')${WB_R}"
   __wb_zrow "$c"
   __wb_plainrow "$labels"
 }

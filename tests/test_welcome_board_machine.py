@@ -80,6 +80,15 @@ class MachineSectionTests(unittest.TestCase):
         self.assertRegex(second, r"SWAP\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"DISK\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"LOAD\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
+        load_line = next(line for line in second.splitlines() if "LOAD" in line)
+        load_legend = next(line for line in second.splitlines() if "1m" in line and "15m" in line)
+        load_values = re.search(r"([0-9]+\.[0-9]{2})\s+([0-9]+\.[0-9]{2})\s+([0-9]+\.[0-9]{2})", load_line)
+        self.assertIsNotNone(load_values)
+        assert load_values is not None
+        for group_index, label in ((1, "1m"), (2, "5m"), (3, "15m")):
+            self.assertEqual(load_values.start(group_index), load_legend.index(label))
+        self.assertNotIn("·", load_legend)
+        self.assertNotIn("(", load_legend)
         self.assertRegex(second, r"CTEMP\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"GTEMP\s+[█░]{8}\s+49%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"GCLK\s+.*139/1911 MHz")
