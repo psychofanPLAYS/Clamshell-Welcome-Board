@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Daily Claude Code + Codex updater with same-day shell notification.
+"""Daily Claude Code + Codex updater with rolling shell notification.
 
 Cron runs the update path. Interactive shells call --notify-shell from ~/.bashrc.
-The notification reads the saved JSON receipt, so opening many terminals does not
+The notification reads saved JSON receipts, so opening many terminals does not
 rerun any updater commands.
 """
 
@@ -19,6 +19,14 @@ from pathlib import Path
 from typing import Any
 
 
+def _history_days() -> int:
+    try:
+        value = int(os.environ.get("CODEX_CLAUDE_UPDATE_HISTORY_DAYS", "7"))
+    except ValueError:
+        return 7
+    return max(1, min(value, 30))
+
+
 STATE_DIR = Path.home() / ".AGENTS" / ".state"
 STATE_PATH = Path(
     os.environ.get(
@@ -32,6 +40,7 @@ LOG_PATH = Path(
         str(Path.home() / ".AGENTS" / "logs" / "codex-claude-daily-update.log"),
     )
 )
+HISTORY_DAYS = _history_days()
 
 DEFAULT_PATH = ":".join(
     [
@@ -116,7 +125,7 @@ def _append_log(receipt: dict[str, Any]) -> None:
 
 
 def _write_state(receipt: dict[str, Any]) -> None:
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     tmp = STATE_PATH.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(receipt, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     tmp.replace(STATE_PATH)
@@ -175,19 +184,72 @@ def _relative_day_label(update_date: date) -> str | None:
     return None
 
 
-def notify_shell() -> int:
-    """Print colored update confirmation for today and yesterday only."""
-    state = _load_state()
-    if not state or not state.get("updated"):
-        return 0
+def _display_day_label(update_date: date) -> str:
+    return _relative_day_label(update_date) or update_date.strftime("%b %d").upper()
 
+
+def _parse_receipt_date(receipt: dict[str, Any]) -> date | None:
     try:
-        update_date = date.fromisoformat(str(state["date"]))
+        return date.fromisoformat(str(receipt["date"]))
     except (KeyError, ValueError):
-        return 0
+        return None
 
-    day_label = _relative_day_label(update_date)
-    if not day_label:
+
+def _parse_receipt_time(receipt: dict[str, Any]) -> str:
+    timestamp = str(receipt.get("timestamp") or "")
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError:
+        return "--:--"
+    return parsed.astimezone().strftime("%H:%M")
+
+
+def _iter_log_receipts() -> list[dict[str, Any]]:
+    receipts: list[dict[str, Any]] = []
+    try:
+        lines = LOG_PATH.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        lines = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            receipt = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(receipt, dict):
+            receipts.append(receipt)
+    return receipts
+
+
+def _receipt_key(receipt: dict[str, Any]) -> tuple[str, str]:
+    return (str(receipt.get("date") or ""), str(receipt.get("timestamp") or ""))
+
+
+def _load_recent_update_receipts(days: int = HISTORY_DAYS) -> list[dict[str, Any]]:
+    """Return changed-version receipts from the rolling N-day window."""
+    cutoff = date.today() - timedelta(days=max(1, days) - 1)
+    receipts = _iter_log_receipts()
+    state = _load_state()
+    if state and _receipt_key(state) not in {_receipt_key(item) for item in receipts}:
+        receipts.append(state)
+
+    recent: list[dict[str, Any]] = []
+    for receipt in receipts:
+        receipt_date = _parse_receipt_date(receipt)
+        if not receipt_date or receipt_date < cutoff:
+            continue
+        if receipt.get("updated"):
+            recent.append(receipt)
+
+    recent.sort(key=lambda item: str(item.get("timestamp") or item.get("date") or ""), reverse=True)
+    return recent
+
+
+def notify_shell() -> int:
+    """Print colored rolling update history without running update commands."""
+    receipts = _load_recent_update_receipts()
+    if not receipts:
         return 0
 
     cream = "\033[38;5;230m"
@@ -199,23 +261,32 @@ def notify_shell() -> int:
     reset = "\033[0m"
     bold = "\033[1m"
 
-    rows = []
-    title_plain = f"{day_label}: agent CLI update confirmation ({update_date.isoformat()})"
+    rows: list[tuple[str, str]] = []
+    title_plain = f"AGENT CLI UPDATE HISTORY - LAST {HISTORY_DAYS} DAYS"
     title_color = (
-        f"{purple}{bold}{day_label}:{reset} "
-        f"{cream}agent CLI update confirmation {dim}({update_date.isoformat()}){reset}"
+        f"{purple}{bold}AGENT CLI UPDATE HISTORY{reset} "
+        f"{dim}- last {HISTORY_DAYS} days{reset}"
     )
     rows.append((title_plain, title_color))
-    for entry in state["updated"]:
-        label = str(entry.get("label") or entry.get("key") or "Tool")
-        before = str(entry.get("before") or "unknown")
-        after = str(entry.get("after") or "unknown")
-        plain = f"Updated {label} from {before} to {after}"
-        colored = (
-            f"{cream}Updated {teal}{bold}{label}{reset}{cream} "
-            f"from {orange}{before}{cream} to {green}{bold}{after}{reset}"
-        )
-        rows.append((plain, colored))
+
+    for receipt in receipts:
+        receipt_date = _parse_receipt_date(receipt)
+        if not receipt_date:
+            continue
+        day_label = _display_day_label(receipt_date)
+        update_time = _parse_receipt_time(receipt)
+        for entry in receipt.get("updated", []):
+            label = str(entry.get("label") or entry.get("key") or "Tool")
+            before = str(entry.get("before") or "unknown")
+            after = str(entry.get("after") or "unknown")
+            prefix_plain = f"{day_label:>9} {update_time}"
+            plain = f"{prefix_plain}  {label}: {before} -> {after}"
+            colored = (
+                f"{purple}{bold}{day_label:>9}{reset} {dim}{update_time}{reset}"
+                f"{cream}  {teal}{bold}{label}{reset}{cream}: "
+                f"{orange}{before}{cream} -> {green}{bold}{after}{reset}"
+            )
+            rows.append((plain, colored))
 
     width = max(len(plain) for plain, _ in rows) + 4
     border = "+" + "-" * width + "+"
@@ -233,7 +304,7 @@ def notify_shell() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--notify-shell", action="store_true", help="print today/yesterday update banner")
+    parser.add_argument("--notify-shell", action="store_true", help="print rolling update history banner")
     parser.add_argument("--state-path", action="store_true", help="print the JSON state path")
     args = parser.parse_args(argv)
 

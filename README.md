@@ -9,7 +9,7 @@ It prints a fast, glanceable terminal board for interactive shells:
 - network and service status
 - useful command reminders
 - Hermes profile shortcuts
-- optional Claude/Codex update notice
+- optional Claude/Codex rolling 7-day update notice
 
 The board is tuned for a black terminal background and fast reading: bold labels,
 zebra rows, gold section dividers, and consistent box rails.
@@ -17,7 +17,7 @@ zebra rows, gold section dividers, and consistent box rails.
 ## Files
 
 - `welcome-board.sh` - bash welcome-board renderer and helper commands.
-- `codex-claude-daily-update` - optional updater/notification helper for Claude Code and Codex CLI.
+- `codex-claude-daily-update` - optional updater/history helper for Claude Code and Codex CLI.
 
 ## Install
 
@@ -41,6 +41,9 @@ Optional update notice:
 ```bash
 [[ $- == *i* ]] && [ -x ~/.AGENTS/bin/codex-claude-daily-update ] && ~/.AGENTS/bin/codex-claude-daily-update --notify-shell
 ```
+
+The notice reads update receipts and prints only recent version changes. It does
+not run update commands when a shell opens.
 
 Optional final spacing after all startup output:
 
