@@ -84,8 +84,8 @@ class MachineSectionTests(unittest.TestCase):
         self.assertRegex(second, r"GTEMP\s+[█░]{8}\s+49%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"GCLK\s+.*139/1911 MHz")
         self.assertRegex(second, r"MCLK\s+.*405/4004 MHz")
-        self.assertNotIn("history", second.lower())
-        self.assertNotIn("sample", second.lower())
+        for confusing_label in ("history", "hitory", "sample", "8sample", "trend"):
+            self.assertNotIn(confusing_label, second.lower())
 
         framed_rows = [line for line in second.splitlines() if line.startswith("  │")]
         self.assertTrue(framed_rows)

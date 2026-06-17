@@ -25,7 +25,9 @@ class PublicArtifactsTests(unittest.TestCase):
             "100.",
             "/home/" + "claw" + "ski",
             "histo" + "ry",
+            "hit" + "ory",
             "sam" + "ple",
+            "8sam" + "ple",
             "tr" + "end",
         )
         for forbidden in forbidden_values:
