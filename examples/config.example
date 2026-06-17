@@ -1,0 +1,5 @@
+WB_DISPLAY_NAME="Alex"
+WB_BANNER_TEXT="WORKSTATION"
+WB_THEME="cyan-dark"
+WB_SECTIONS="machine tmux commands"
+WELCOME_BOARD_MACHINE_HISTORY="$HOME/.local/state/welcome-board/machine-series.tsv"

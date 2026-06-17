@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WB_SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WB_REPO_ROOT="$(cd -- "$WB_SCRIPT_DIR/.." && pwd)"
+WB_CONFIG="${WELCOME_BOARD_CONFIG:-$HOME/.config/welcome-board/config}"
+WB_BOARD_FILE="${WELCOME_BOARD_BOARD_FILE:-$WB_REPO_ROOT/welcome-board.sh}"
+if [ ! -r "$WB_BOARD_FILE" ] && [ -r "$HOME/.local/share/welcome-board/welcome-board.sh" ]; then
+  WB_BOARD_FILE="$HOME/.local/share/welcome-board/welcome-board.sh"
+fi
+
+wb_usage() {
+  cat <<'EOF'
+wb - terminal welcome board helper
+
+Usage:
+  wb                 Render the board
+  wb help            Show this help
+  wb setup           Ask basic questions and write config
+  wb theme           Show available themes
+  wb theme NAME      Set theme
+  wb sections        Show configured sections
+  wb ports scan      Read-only listening-port scan
+
+Also installed:
+  welcomeboard -> wb
+
+Safety:
+  wb ports scan is read-only. Firewall changes belong in a future explicit
+  scan -> explain -> plan -> apply flow.
+EOF
+}
+
+wb_config_dir() {
+  dirname -- "$WB_CONFIG"
+}
+
+wb_config_get() {
+  local key="$1"
+  if [ -r "$WB_CONFIG" ]; then
+    awk -F= -v k="$key" '$1==k {gsub(/^"|"$/, "", $2); print $2; exit}' "$WB_CONFIG"
+  fi
+}
+
+wb_config_quote() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+wb_config_set() {
+  local key="$1" value="$2" dir tmp
+  dir="$(wb_config_dir)"
+  mkdir -p "$dir"
+  tmp="${WB_CONFIG}.tmp.$$"
+  if [ -r "$WB_CONFIG" ]; then
+    awk -F= -v k="$key" '$1!=k {print}' "$WB_CONFIG" > "$tmp"
+  else
+    : > "$tmp"
+  fi
+  printf '%s=%s\n' "$key" "$(wb_config_quote "$value")" >> "$tmp"
+  mv "$tmp" "$WB_CONFIG"
+}
+
+wb_theme_list() {
+  cat <<'EOF'
+Available themes:
+  cyan-dark       cool cyan rails, dark terminal
+  amber-terminal  orange/gold terminal style
+  green-phosphor  green monochrome terminal style
+  mono-safe       minimal color for compatibility
+EOF
+}
+
+wb_theme_set() {
+  case "$1" in
+    cyan-dark|amber-terminal|green-phosphor|mono-safe)
+      wb_config_set WB_THEME "$1"
+      printf 'Theme set: %s\n' "$1"
+      ;;
+    *)
+      printf 'Unknown theme: %s\n\n' "$1" >&2
+      wb_theme_list >&2
+      return 2
+      ;;
+  esac
+}
+
+wb_setup() {
+  local name banner theme sections
+  printf 'Display name [%s]: ' "${USER:-you}"
+  read -r name
+  name="${name:-${USER:-you}}"
+
+  printf 'Banner text [%s]: ' "$(hostname -s 2>/dev/null || printf WORKSTATION)"
+  read -r banner
+  banner="${banner:-$(hostname -s 2>/dev/null || printf WORKSTATION)}"
+
+  wb_theme_list
+  printf 'Theme [cyan-dark]: '
+  read -r theme
+  theme="${theme:-cyan-dark}"
+  case "$theme" in
+    cyan-dark|amber-terminal|green-phosphor|mono-safe) ;;
+    *) printf 'Unknown theme, using cyan-dark.\n'; theme="cyan-dark" ;;
+  esac
+
+  printf 'Sections [machine tmux commands]: '
+  read -r sections
+  sections="${sections:-machine tmux commands}"
+
+  mkdir -p "$(wb_config_dir)"
+  {
+    printf 'WB_DISPLAY_NAME=%s\n' "$(wb_config_quote "$name")"
+    printf 'WB_BANNER_TEXT=%s\n' "$(wb_config_quote "$banner")"
+    printf 'WB_THEME=%s\n' "$(wb_config_quote "$theme")"
+    printf 'WB_SECTIONS=%s\n' "$(wb_config_quote "$sections")"
+  } > "$WB_CONFIG"
+
+  printf 'Wrote %s\n' "$WB_CONFIG"
+}
+
+wb_sections() {
+  local sections
+  sections="$(wb_config_get WB_SECTIONS)"
+  printf 'Sections: %s\n' "${sections:-machine tmux commands}"
+}
+
+wb_ports_scan() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -tuln
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP -sTCP:LISTEN -P -n
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -an
+  else
+    printf 'No supported port scanner found (need ss, lsof, or netstat).\n' >&2
+    return 1
+  fi
+}
+
+wb_render() {
+  export WELCOME_BOARD_CONFIG="$WB_CONFIG"
+  # shellcheck source=/dev/null
+  source "$WB_BOARD_FILE"
+  clamboard
+}
+
+cmd="${1:-render}"
+case "$cmd" in
+  render) wb_render ;;
+  help|-h|--help) wb_usage ;;
+  setup) wb_setup ;;
+  theme)
+    if [ "${2:-}" ]; then wb_theme_set "$2"; else wb_theme_list; fi
+    ;;
+  sections) wb_sections ;;
+  ports)
+    case "${2:-}" in
+      scan) wb_ports_scan ;;
+      ""|help|-h|--help) printf 'Usage: wb ports scan\n' ;;
+      *) printf 'Unknown ports command: %s\n' "$2" >&2; exit 2 ;;
+    esac
+    ;;
+  *) printf 'Unknown command: %s\n\n' "$cmd" >&2; wb_usage >&2; exit 2 ;;
+esac
