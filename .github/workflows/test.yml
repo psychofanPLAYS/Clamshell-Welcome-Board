@@ -8,7 +8,14 @@ on:
 
 jobs:
   shell-and-python:
-    runs-on: ubuntu-latest
+    name: shell-and-python (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

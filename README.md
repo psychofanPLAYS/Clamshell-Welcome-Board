@@ -22,7 +22,7 @@ A fast, pretty terminal welcome board for Linux and macOS shells.
 
 It is designed for people who want a useful first screen when they open a terminal: machine pressure, temperature, memory, disk, shell helpers, tmux sessions, and optional update notices, all in a compact dark-terminal layout.
 
-> Public-release status: **in progress**. The current code works on the original Linux machine and has tests, but some sections are still being generalized from a personal setup into a reusable installer.
+> Public-release status: **in progress**. The current code is generalized for Linux/macOS installs and tested in CI, but the license and final public-release gate still need an explicit project-owner decision.
 
 ## What It Does
 
@@ -142,8 +142,8 @@ Linux:
 
 macOS:
 
-- CPU, memory, disk, and tmux sections can be supported.
-- GPU memory and clocks are limited by Apple tooling and should degrade gracefully.
+- CPU, memory, disk, load, and tmux sections are supported with native macOS probes.
+- GPU memory, temperatures, and clocks are limited by Apple tooling and degrade gracefully when unavailable.
 - Port scanning should use `lsof` / `netstat` equivalents.
 
 ## Safety And Privacy
@@ -156,10 +156,9 @@ macOS:
 
 ## Roadmap
 
-- Continue moving personal sections into config-driven sections.
-- Add platform-specific macOS probes and tests.
-- Add dry-run port security planner.
+- Pick and add a `LICENSE` file before public redistribution.
 - Add screenshots once the public theme set is stable.
+- Expand non-NVIDIA GPU probes where the OS exposes reliable metrics.
 
 ## License
 

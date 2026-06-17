@@ -114,8 +114,11 @@ __wb_lbl() { printf '%s%-11s%s' "$WB_GRY" "$1" "$WB_R"; }   # fixed grey label c
 
 # ---- time-aware rotating greeting (first name only, never surname) ----------
 __wb_pick() {
-  local -n choices=$1
-  printf '%s' "${choices[RANDOM % ${#choices[@]}]}"
+  local name="$1" count idx
+  eval "count=\${#$name[@]}"
+  [ "${count:-0}" -gt 0 ] 2>/dev/null || return 0
+  idx=$((RANDOM % count))
+  eval "printf '%s' \"\${$name[$idx]}\""
 }
 __wb_greeting_parts() {
   local h; h=$((10#$(date +%H)))
@@ -543,18 +546,17 @@ __wb_portname() {
   esac
 }
 __wb_group() {  # $1 ports, $2 name-color
-  local -A m=(); local -a order=(); local p n
-  for p in $(echo "$1" | tr ' ' '\n' | sort -nu); do
+  local ports="$1" color="$2" out="" p n
+  for p in $(printf '%s\n' "$ports" | tr ' ' '\n' | sed '/^$/d' | sort -nu); do
     n=$(__wb_portname "$p")
-    if [ -z "${m[$n]}" ]; then m[$n]="$p"; order+=("$n"); else m[$n]="${m[$n]}/$p"; fi
+    out="$out${WB_DM}, ${color}${n}${WB_DM}:${p}"
   done
-  local out="" k; for k in "${order[@]}"; do out="$out${WB_DM}, ${2}${k}"; done
   printf '%s' "${out#${WB_DM}, }"
 }
 __wb_locks() {
   __wb_hdr "LOCKS"
   local expected=" ${WB_EXPECTED_PORTS:-} "
-  local lan="" alert="" rygel_ports="" line port addr proc; declare -A seen
+  local lan="" alert="" rygel_ports="" seen_ports="" line port addr proc
   while read -r line; do
     read -r _ _ _ addr _ proc <<<"$line"
     port="${addr##*:}"
@@ -562,7 +564,8 @@ __wb_locks() {
     addr="${addr%\%*}"
     addr="${addr//[\[\]]/}"
     case "$addr" in 127.*|::1|100.*|fd7a:*|fe80:*) continue;; esac
-    [ -n "${seen[$port]}" ] && continue; seen[$port]=1
+    case " $seen_ports " in *" $port "*) continue;; esac
+    seen_ports="$seen_ports $port"
     if [[ "$proc" == rygel* || "$proc" == *rygel* ]]; then
       rygel_ports="$rygel_ports $port"
     elif [[ "$expected" == *" $port "* ]]; then
@@ -640,7 +643,7 @@ __wb_commands() {
   __wb_zreset
   __wb_cmdrow "BOARD"  "${WB_CYN}wb${WB_FR} ${WB_D}render${WB_FR}   ${WB_CYN}wb help${WB_FR}   ${WB_CYN}welcomeboard${WB_FR}"
   __wb_cmdrow "SETUP"  "${WB_CYN}wb setup${WB_FR} ${WB_D}name, banner, theme, sections${WB_FR}   ${WB_CYN}wb theme${WB_FR}"
-  __wb_cmdrow "PORTS"  "${WB_CYN}wb ports scan${WB_FR} ${WB_D}read-only; no firewall edits${WB_FR}"
+  __wb_cmdrow "PORTS"  "${WB_CYN}wb ports explain${WB_FR} ${WB_D}read-only map${WB_FR}   ${WB_CYN}wb ports plan${WB_FR} ${WB_D}dry run${WB_FR}"
   __wb_cmdrow "TMUX"   "${WB_D}new:${WB_FR} ${WB_CYN}tmux new -s work${WB_FR}   ${WB_D}join:${WB_FR} ${WB_CYN}tmux attach -t work${WB_FR}"
   __wb_cmdrow ""       "${WB_D}detach:${WB_FR} ${WB_CYN}Ctrl-b d${WB_FR}   ${WB_D}list:${WB_FR} ${WB_CYN}tmux ls${WB_FR}"
   __wb_cmdrow "CHECK"  "${WB_CYN}bash -n welcome-board.sh${WB_FR}   ${WB_CYN}python3 -m unittest discover -s tests -v${WB_FR}"
