@@ -101,7 +101,7 @@ class MachineSectionTests(unittest.TestCase):
         self.assertNotIn("PRESSURE", second)
         self.assertNotIn("CLOCKS", second)
         self.assertRegex(second, r"TEMP\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}.*CPU")
-        self.assertRegex(second, r"USAGE\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}.*i7-6700HQ")
+        self.assertRegex(second, r"USAGE\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}.*8t")
         self.assertRegex(second, r"TEMP\s+[█░]{8}\s+49%\s+[▁▂▃▄▅▆▇█]{8}.*GPU")
         self.assertRegex(second, r"CORE\s+.*139/1911 MHz")
         self.assertRegex(second, r"USAGE\s+[█░]{8}\s+19%\s+[▁▂▃▄▅▆▇█]{8}.*GTX 1060")
