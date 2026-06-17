@@ -37,6 +37,8 @@ It is designed for people who want a useful first screen when they open a termin
 
 ## Target Experience
 
+See a fuller public-safe render preview in [docs/demo-output.txt](docs/demo-output.txt).
+
 ```text
 PRESSURE
 CPU   ██░░░░░░  32% ▁▁▁▁▁▂▂▃  i7-6700HQ  8t · 2.70/3.50 GHz
@@ -179,7 +181,7 @@ macOS:
 ## Roadmap
 
 - Pick and add a `LICENSE` file before public redistribution.
-- Add screenshots once the public theme set is stable.
+- Add an optional PNG screenshot once the public theme set is stable.
 - Expand non-NVIDIA GPU probes where the OS exposes reliable metrics.
 
 ## License

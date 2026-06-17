@@ -1,0 +1,38 @@
+WORKSTATION
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                                                                              │
+│ Hello, ALEX. clean signal, no drama.                                         │
+│ up 3h 12m · Wed 17 Jun · 13:24                                              │
+│                                                                              │
+╞══ MACHINE ═══════════════════════════════════════════════════════════════════╡
+│                                                                              │
+│                      PRESSURE                                                │
+│ CPU   ██░░░░░░  32% ▁▁▁▁▁▂▂▃  Generic CPU  8t · 2.70/3.50 GHz               │
+│ GPU   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  no GPU · ? W                                  │
+│ VRAM  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  ?/? MB                                        │
+│ RAM   ████░░░░  55% ▁▁▁▁▁▄▄▄  8.6/16 GB                                     │
+│ SWAP  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  0.0/8 GB                                      │
+│ DISK  ██░░░░░░  20% ▁▁▁▁▁▂▂▂  80/400 GB · root fs                           │
+│ LOAD  █░░░░░░░  14% ▁▁▁▁▁▁▂▂   1.10  0.80  0.65 · up 3h 12m                 │
+│                      (1m) · (5m) · (15m)                                     │
+│                      TEMP                                                    │
+│ CTEMP ███░░░░░  45% ▁▁▁▁▁▄▄▄  CPU · 45°C                                    │
+│ GTEMP ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  GPU · not exposed                             │
+│                      CLOCKS                                                  │
+│ GCLK  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  graphics · not exposed                        │
+│ MCLK  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  memory · not exposed                          │
+│                                                                              │
+╞══ TMUX ══════════════════════════════════════════════════════════════════════╡
+│                                                                              │
+│ work            3 windows · attached                                         │
+│ notes           1 window · detached                                          │
+│                                                                              │
+╞══ COMMANDS ══════════════════════════════════════════════════════════════════╡
+│                                                                              │
+│ BOARD    wb render   wb help   welcomeboard                                  │
+│ SETUP    wb setup name, banner, theme, sections   wb theme                   │
+│ PORTS    wb ports explain read-only map   wb ports plan dry run              │
+│ TMUX     new: tmux new -s work   join: tmux attach -t work                   │
+│ CHECK    bash -n welcome-board.sh   python3 -m unittest discover -s tests -v │
+└──────────────────────────────────────────────────────────────────────────────┘
