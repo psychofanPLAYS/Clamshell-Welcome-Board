@@ -210,7 +210,7 @@ def _parse_receipt_time(receipt: dict[str, Any]) -> str:
         parsed = datetime.fromisoformat(timestamp)
     except ValueError:
         return "--:--"
-    return parsed.astimezone().strftime("%H:%M")
+    return parsed.strftime("%H:%M")
 
 
 def _read_recent_log_lines(max_bytes: int = MAX_LOG_READ_BYTES) -> list[str]:

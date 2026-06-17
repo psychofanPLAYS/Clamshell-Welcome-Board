@@ -8,6 +8,7 @@ import json
 import os
 import re
 import tempfile
+import time
 import unittest
 import uuid
 from datetime import date as real_date
@@ -158,6 +159,24 @@ class RollingHistoryTests(unittest.TestCase):
 
             lines = module._read_recent_log_lines(max_bytes=len(new_line) + 4)
             self.assertEqual(lines, [new_line])
+
+    @unittest.skipUnless(hasattr(time, "tzset"), "requires POSIX timezone control")
+    def test_receipt_time_uses_recorded_offset_not_runner_timezone(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_tmpdir:
+            tmpdir = Path(raw_tmpdir)
+            module = load_module(tmpdir)
+
+            old_tz = os.environ.get("TZ")
+            try:
+                os.environ["TZ"] = "UTC"
+                time.tzset()
+                self.assertEqual(module._parse_receipt_time(receipt("2026-06-17", "2.1.178", "2.1.179")), "06:45")
+            finally:
+                if old_tz is None:
+                    os.environ.pop("TZ", None)
+                else:
+                    os.environ["TZ"] = old_tz
+                time.tzset()
 
 
 if __name__ == "__main__":
