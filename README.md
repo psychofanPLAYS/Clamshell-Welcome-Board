@@ -16,6 +16,8 @@ Please do this safely:
 
 Prompt file: [prompts/install-with-agent.md](prompts/install-with-agent.md)
 
+Optional packaged skill for compatible agents: [skills/welcome-board-installer/SKILL.md](skills/welcome-board-installer/SKILL.md)
+
 # Clamshell Welcome Board
 
 [![test](https://github.com/psychofanPLAYS/Clamshell-Welcome-Board/actions/workflows/test.yml/badge.svg)](https://github.com/psychofanPLAYS/Clamshell-Welcome-Board/actions/workflows/test.yml)

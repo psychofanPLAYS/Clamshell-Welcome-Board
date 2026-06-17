@@ -1,0 +1,4 @@
+interface:
+  display_name: "Welcome Board Installer"
+  short_description: "Install and customize the Clamshell Welcome Board safely."
+  default_prompt: "Install and customize this terminal welcome board for me safely."
