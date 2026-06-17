@@ -171,6 +171,7 @@ macOS:
 - No secrets should be stored in the repo.
 - Firewall/port lockdown is not applied by this version; port commands are read-only scan/explain/plan helpers.
 - Local machine names, private IPs, and personal aliases should live in user config, not committed defaults.
+- Security policy and reporting notes live in [SECURITY.md](SECURITY.md).
 - AI agents should follow [docs/LLM_EXTENSION_GUIDE.md](docs/LLM_EXTENSION_GUIDE.md) before editing.
 
 ## Reliability Notes
