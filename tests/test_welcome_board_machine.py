@@ -28,7 +28,32 @@ def render_machine_section(home: Path) -> str:
     return ANSI_RE.sub("", result.stdout).replace("\x06", "")
 
 
+def render_load_row() -> str:
+    command = (
+        f"source {SCRIPT}; __wb_paint; WB_FRAME_ON=1; WB_FRAME_INNER=78; "
+        "WB_W=78; WB_ZW=78; __wb_loadrow 15 1.25 1.07 1.05 '1d 23h 3m' '▁▁▁▁▁▁▁▂'"
+    )
+    result = subprocess.run(
+        ["bash", "-c", command],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return ANSI_RE.sub("", result.stdout).replace("\x06", "")
+
+
 class MachineSectionTests(unittest.TestCase):
+    def test_load_legend_is_centered_under_load_values(self) -> None:
+        rendered = render_load_row()
+        load_line = next(line for line in rendered.splitlines() if "LOAD" in line)
+        load_legend = next(line for line in rendered.splitlines() if "1m" in line and "15m" in line)
+
+        for value, label in (("1.25", "1m"), ("1.07", "5m"), ("1.05", "15m")):
+            self.assertEqual(load_line.index(value), load_legend.index(label))
+        self.assertNotIn("·", load_legend)
+        self.assertNotIn("(", load_legend)
+        self.assertNotIn(")", load_legend)
+
     def test_machine_rows_are_grouped_have_graphs_and_stay_aligned(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
             home = Path(raw_tmp)
@@ -80,15 +105,6 @@ class MachineSectionTests(unittest.TestCase):
         self.assertRegex(second, r"SWAP\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"DISK\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"LOAD\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
-        load_line = next(line for line in second.splitlines() if "LOAD" in line)
-        load_legend = next(line for line in second.splitlines() if "1m" in line and "15m" in line)
-        load_values = re.search(r"([0-9]+\.[0-9]{2})\s+([0-9]+\.[0-9]{2})\s+([0-9]+\.[0-9]{2})", load_line)
-        self.assertIsNotNone(load_values)
-        assert load_values is not None
-        for group_index, label in ((1, "1m"), (2, "5m"), (3, "15m")):
-            self.assertEqual(load_values.start(group_index), load_legend.index(label))
-        self.assertNotIn("·", load_legend)
-        self.assertNotIn("(", load_legend)
         self.assertRegex(second, r"CTEMP\s+[█░]{8}\s+\d+%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"GTEMP\s+[█░]{8}\s+49%\s+[▁▂▃▄▅▆▇█]{8}")
         self.assertRegex(second, r"GCLK\s+.*139/1911 MHz")
