@@ -111,9 +111,11 @@ wb setup
 wb theme
 wb sections
 wb ports scan
+wb ports explain
+wb ports plan
 ```
 
-`wb ports plan` and `wb ports apply` are intentionally not implemented yet. They must follow [docs/PORT_SECURITY_MODEL.md](docs/PORT_SECURITY_MODEL.md).
+`wb ports scan`, `wb ports explain`, and `wb ports plan` are read-only. `wb ports apply` is intentionally not implemented because it would mutate firewall state. Port safety rules live in [docs/PORT_SECURITY_MODEL.md](docs/PORT_SECURITY_MODEL.md).
 
 ## Common Commands
 

@@ -57,12 +57,18 @@ PORTS  check 0.0.0.0:3000 · run wb ports scan
 ## Future Commands
 
 ```bash
-wb ports scan       # read-only
-wb ports explain    # read-only
-wb ports plan       # writes a dry-run plan
+wb ports scan       # read-only raw scanner output
+wb ports explain    # read-only classification and plain-language notes
+wb ports plan       # prints a dry-run plan; writes and applies nothing
 wb ports apply      # mutating, explicit approval only
 wb ports rollback   # mutating, restores last saved plan
 ```
+
+Current implementation status:
+
+- `scan`, `explain`, and `plan` exist.
+- `plan` does not write files and does not print commands such as `ufw enable`.
+- `apply` and `rollback` are intentionally refused until a future version has an approval and rollback model.
 
 ## Public Repo Requirement
 

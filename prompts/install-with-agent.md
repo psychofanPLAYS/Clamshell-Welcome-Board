@@ -26,4 +26,6 @@ Leave me with these commands working:
 - wb theme
 - wb sections
 - wb ports scan
+- wb ports explain
+- wb ports plan
 ```

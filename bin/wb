@@ -21,13 +21,15 @@ Usage:
   wb theme NAME      Set theme
   wb sections        Show configured sections
   wb ports scan      Read-only listening-port scan
+  wb ports explain   Read-only plain-English port explanation
+  wb ports plan      Print a dry-run lockdown plan
 
 Also installed:
   welcomeboard -> wb
 
 Safety:
-  wb ports scan is read-only. Firewall changes belong in a future explicit
-  scan -> explain -> plan -> apply flow.
+  wb ports scan/explain/plan are read-only. Firewall changes belong in a
+  future explicit apply flow and are not implemented here.
 EOF
 }
 
@@ -140,6 +142,91 @@ wb_ports_scan() {
   fi
 }
 
+wb_ports_lines() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -tulpen 2>/dev/null || ss -tuln
+  elif command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP -sTCP:LISTEN -P -n
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -an
+  else
+    printf 'No supported port scanner found (need ss, lsof, or netstat).\n' >&2
+    return 1
+  fi
+}
+
+wb_ports_report() {
+  local mode="${1:-explain}" tmp line field addr port process scope known
+  tmp="$(mktemp)"
+  wb_ports_lines > "$tmp"
+
+  if [ "$mode" = "plan" ]; then
+    printf 'Dry-run port lockdown plan\n'
+    printf 'No commands were executed.\n\n'
+    printf 'Step 1: review these LAN-visible listeners with the user.\n'
+  else
+    printf 'Read-only port explanation\n'
+    printf 'No firewall changes were made.\n\n'
+  fi
+
+  while IFS= read -r line; do
+    case "$line" in
+      Netid*|State*|COMMAND*|"") continue ;;
+    esac
+    addr=""
+    port=""
+    for field in $line; do
+      field="${field#[}"
+      field="${field%]}"
+      if [[ "$field" =~ ^(.+):([0-9]+)$ ]]; then
+        addr="${BASH_REMATCH[1]}"
+        port="${BASH_REMATCH[2]}"
+        break
+      fi
+    done
+    [ -n "$port" ] || continue
+    process="unknown"
+    if [[ "$line" =~ users:\(\(\"([^\"]+)\" ]]; then
+      process="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ([A-Za-z0-9_.-]+),pid= ]]; then
+      process="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ^([A-Za-z0-9_.-]+)[[:space:]] ]]; then
+      process="${BASH_REMATCH[1]}"
+    fi
+
+    scope="LAN-visible"
+    case "$addr" in
+      127.*|::1|\[::1\]|localhost) scope="loopback" ;;
+      100.*|fd7a:*|fe80:*) scope="VPN/private" ;;
+    esac
+
+    known=""
+    case "$port" in
+      22) known="SSH: do not block until you have another login path" ;;
+      3000|5173|8000|8080) known="common dev server; keep only if you use it" ;;
+      5432) known="Postgres; usually local-only" ;;
+      6379) known="Redis; usually local-only" ;;
+      5353) known="mDNS/Bonjour; normal on many desktops" ;;
+      *) known="ask whether this is intentionally used" ;;
+    esac
+
+    printf '%s  %s:%s  process=%s  %s\n' "$scope" "$addr" "$port" "$process" "$known"
+  done < "$tmp"
+  rm -f "$tmp"
+
+  if [ "$mode" = "plan" ]; then
+    cat <<'EOF'
+
+Step 2: ask the user which LAN-visible ports they personally use.
+Step 3: keep SSH only when another login path or local console is confirmed.
+Step 4: generate firewall commands for the user's OS in a separate apply step.
+Step 5: save rollback commands before applying anything.
+
+This command is a dry run. It does not enable ufw, pfctl, iptables, nft, or any firewall.
+EOF
+  fi
+}
+
 wb_render() {
   export WELCOME_BOARD_CONFIG="$WB_CONFIG"
   # shellcheck source=/dev/null
@@ -159,7 +246,10 @@ case "$cmd" in
   ports)
     case "${2:-}" in
       scan) wb_ports_scan ;;
-      ""|help|-h|--help) printf 'Usage: wb ports scan\n' ;;
+      explain) wb_ports_report explain ;;
+      plan) wb_ports_report plan ;;
+      apply|rollback) printf 'wb ports %s is not implemented because it would be mutating. Use scan/explain/plan first.\n' "$2" >&2; exit 2 ;;
+      ""|help|-h|--help) printf 'Usage: wb ports {scan|explain|plan}\n' ;;
       *) printf 'Unknown ports command: %s\n' "$2" >&2; exit 2 ;;
     esac
     ;;
