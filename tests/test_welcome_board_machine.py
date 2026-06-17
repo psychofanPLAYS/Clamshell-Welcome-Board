@@ -33,12 +33,39 @@ class MachineSectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw_tmp:
             home = Path(raw_tmp)
             (home / "bin").mkdir()
+            (home / "bin" / "uname").write_text(
+                "#!/usr/bin/env bash\nprintf 'Linux\\n'\n",
+                encoding="utf-8",
+            )
+            (home / "bin" / "nproc").write_text(
+                "#!/usr/bin/env bash\nprintf '8\\n'\n",
+                encoding="utf-8",
+            )
+            (home / "bin" / "free").write_text(
+                "#!/usr/bin/env bash\n"
+                "cat <<'EOF'\n"
+                "              total        used        free      shared  buff/cache   available\n"
+                "Mem:          16000        8000        2000         100        6000        7000\n"
+                "Swap:          8000        2000        6000\n"
+                "EOF\n",
+                encoding="utf-8",
+            )
+            (home / "bin" / "df").write_text(
+                "#!/usr/bin/env bash\n"
+                "if [ \"$1\" = \"-BG\" ]; then\n"
+                "  printf ' Used 1B-blocks Use%%\\n80 400 20\\n'\n"
+                "else\n"
+                "  /bin/df \"$@\" 2>/dev/null || /usr/bin/df \"$@\"\n"
+                "fi\n",
+                encoding="utf-8",
+            )
             (home / "bin" / "nvidia-smi").write_text(
                 "#!/usr/bin/env bash\n"
                 "printf '%s\\n' 'NVIDIA GeForce GTX 1060, P8, 19, 49, 3830, 6078, 139, 1911, 405, 4004, 18.2'\n",
                 encoding="utf-8",
             )
-            (home / "bin" / "nvidia-smi").chmod(0o755)
+            for path in (home / "bin").iterdir():
+                path.chmod(0o755)
 
             first = render_machine_section(home)
             second = render_machine_section(home)
