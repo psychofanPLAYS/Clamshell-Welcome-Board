@@ -407,8 +407,58 @@ __wb_cpubusy() {
   else awk -v n="$(nproc 2>/dev/null||echo 1)" '{p=$1/n*100;p=(p>100)?100:p;printf "%d",p}' /proc/loadavg 2>/dev/null; fi
 }
 
+__wb_macos_load() {
+  uptime 2>/dev/null | awk -F'load averages?: ' '{split($2,a," "); print a[1],a[2],a[3]}' | awk '{print $1,$2,$3}'
+}
+
+__wb_machine_macos() {
+  __wb_hdr "MACHINE"; __wb_zreset
+  local cbrand cores mem_bytes vm page_size active wired compressed used_pages used_gb total_gb rpct
+  local du dt dp l1 l5 l15 lpct up
+  cbrand=$(sysctl -n machdep.cpu.brand_string 2>/dev/null)
+  : "${cbrand:=Apple CPU}"
+  cores=$(sysctl -n hw.logicalcpu 2>/dev/null)
+  : "${cores:=?}"
+
+  mem_bytes=$(sysctl -n hw.memsize 2>/dev/null)
+  vm=$(vm_stat 2>/dev/null)
+  page_size=$(printf '%s\n' "$vm" | awk '/page size of/{gsub(/[^0-9]/,"",$8); print $8; exit}')
+  : "${page_size:=4096}"
+  active=$(printf '%s\n' "$vm" | awk '/Pages active/{gsub(/[^0-9]/,"",$3); print $3; exit}')
+  wired=$(printf '%s\n' "$vm" | awk '/Pages wired down/{gsub(/[^0-9]/,"",$4); print $4; exit}')
+  compressed=$(printf '%s\n' "$vm" | awk '/Pages occupied by compressor/{gsub(/[^0-9]/,"",$5); print $5; exit}')
+  used_pages=$(( ${active:-0} + ${wired:-0} + ${compressed:-0} ))
+  used_gb=$(awk -v p="$used_pages" -v s="$page_size" 'BEGIN{printf "%.1f", p*s/1024/1024/1024}')
+  total_gb=$(awk -v b="${mem_bytes:-0}" 'BEGIN{if(b>0)printf "%.0f", b/1024/1024/1024; else printf "?"}')
+  rpct=$(awk -v u="$used_gb" -v t="$total_gb" 'BEGIN{if(t>0)printf "%d", u*100/t; else printf 0}')
+
+  read -r dt du dp < <(df -P / 2>/dev/null | awk 'NR==2{gsub(/%/,"",$5); printf "%.0f %.0f %s", $2*512/1024/1024/1024, $3*512/1024/1024/1024, $5}')
+  read -r l1 l5 l15 < <(__wb_macos_load)
+  lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{if(n<1)n=1; p=x/n*100; if(p>100)p=100; printf "%d", p}')
+  up=$(uptime 2>/dev/null | sed -E 's/^.* up  *//; s/, *[0-9]+ users?.*$//; s/load averages?:.*$//; s/  */ /g; s/,$//')
+
+  __wb_msub "PRESSURE"
+  __wb_mrow "CPU"  "${lpct:-0}" "$(__wb_hist_graph cpu "${lpct:-0}")" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}macOS"
+  __wb_mrow "GPU"  "0"          "$(__wb_hist_graph gpu 0)" "${WB_DEV}Apple/Metal GPU${WB_DM} · not exposed"
+  __wb_mrow "VRAM" "0"          "$(__wb_hist_graph vram 0)" "${WB_DM}shared memory on Apple/Metal systems"
+  __wb_mrow "RAM"  "${rpct:-0}" "$(__wb_hist_graph ram "${rpct:-0}")" "$(__wb_grad "${rpct:-0}")${used_gb}${WB_DM}/${total_gb} GB"
+  __wb_mrow "SWAP" "0"          "$(__wb_hist_graph swap 0)" "${WB_DM}macOS manages swap dynamically"
+  __wb_mrow "DISK" "${dp:-0}"   "$(__wb_hist_graph disk "${dp:-0}")" "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root fs"
+  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
+  __wb_msub "TEMP"
+  __wb_mrow "CTEMP" "0" "$(__wb_hist_graph ctemp 0)" "${WB_DEV}CPU${WB_DM} · not exposed"
+  __wb_mrow "GTEMP" "0" "$(__wb_hist_graph gtemp 0)" "${WB_DEV}GPU${WB_DM} · not exposed"
+  __wb_msub "CLOCKS"
+  __wb_mrow "GCLK" "0" "$(__wb_hist_graph gclk 0)" "${WB_DEV}graphics${WB_DM} · not exposed"
+  __wb_mrow "MCLK" "0" "$(__wb_hist_graph mclk 0)" "${WB_DEV}memory${WB_DM} · not exposed"
+}
+
 # ---- MACHINE (full geek panel: aligned gauges + every pollable stat) --------
 __wb_machine() {
+  if [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+    __wb_machine_macos
+    return
+  fi
   __wb_hdr "MACHINE"; __wb_zreset
   # --- CPU ---
   local cbrand cores ctemp cfcur cfmax cbusy

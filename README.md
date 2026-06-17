@@ -14,6 +14,8 @@ Please do this safely:
 7. Leave me with the commands `wb`, `welcomeboard`, `wb help`, and `wb theme`.
 ```
 
+Prompt file: [prompts/install-with-agent.md](prompts/install-with-agent.md)
+
 # Clamshell Welcome Board
 
 A fast, pretty terminal welcome board for Linux and macOS shells.
@@ -58,7 +60,7 @@ How to read the machine rows:
 
 ## Install Today
 
-Linux-first installer:
+Linux/macOS installer:
 
 ```bash
 ./install.sh
