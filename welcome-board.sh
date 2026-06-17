@@ -237,11 +237,15 @@ __wb_bar() {
 }
 __wb_tcol() { local t="${1:-0}"; [[ "$t" =~ ^[0-9]+$ ]] || { printf '%s' "$WB_GRY"; return; }
   if ((t>=80)); then printf '%s' "$WB_RED"; elif ((t>=70)); then printf '%s' "$WB_YEL"; else printf '%s' "$WB_GRN"; fi; }
-# one aligned, zebra-striped panel row:  $1 name  $2 pct  $3 device+detail (WB_FR resets)
+# one aligned, zebra-striped panel row:  $1 name  $2 pct  $3 sparkline  $4 device+detail (WB_FR resets)
 __wb_mrow() {
-  local c
-  c="${WB_LBL}$(printf '%-5s' "$1")${WB_FR}$(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-?}")%${WB_FR}   $3"
+  local c graph="$3"
+  [ -z "$graph" ] && graph="▁▁▁▁▁▁▁▁"
+  c="${WB_LBL}$(printf '%-5s' "$1")${WB_FR} $(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-?}")%${WB_FR} ${WB_CYN}${graph}${WB_FR}  $4"
   __wb_zrow "$c"
+}
+__wb_msub() {
+  __wb_plainrow "${WB_DM}$(printf '%21s' '')${WB_GOLD}${1}${WB_FR}"
 }
 __wb_center() {
   local w="$1" text="$2" pad right
@@ -250,11 +254,67 @@ __wb_center() {
   printf '%*s%s%*s' "$pad" '' "$text" "$right" ''
 }
 __wb_loadrow() {
-  local pct="$1" l1="$2" l5="$3" l15="$4" up="$5" c labels
-  c="${WB_LBL}$(printf '%-5s' 'LOAD')${WB_FR}$(__wb_bar "$pct") ${WB_B}${WB_WHT}$(printf '%3s' "${pct:-0}")%${WB_FR}   ${WB_WHT}$(printf '%5s %5s %5s' "${l1:-?}" "${l5:-?}" "${l15:-?}")${WB_DM} · up ${up:-?}"
+  local pct="$1" l1="$2" l5="$3" l15="$4" up="$5" graph="$6" c labels
+  [ -z "$graph" ] && graph="▁▁▁▁▁▁▁▁"
+  c="${WB_LBL}$(printf '%-5s' 'LOAD')${WB_FR} $(__wb_bar "$pct") ${WB_B}${WB_WHT}$(printf '%3s' "${pct:-0}")%${WB_FR} ${WB_CYN}${graph}${WB_FR}  ${WB_WHT}$(printf '%5s %5s %5s' "${l1:-?}" "${l5:-?}" "${l15:-?}")${WB_DM} · up ${up:-?}"
   labels="${WB_D}$(printf '%21s' '')(${WB_WHT}1m${WB_D}) · (${WB_WHT}5m${WB_D}) · (${WB_WHT}15m${WB_D})${WB_R}"
   __wb_zrow "$c"
   __wb_plainrow "$labels"
+}
+__wb_pct() {
+  local p="${1:-0}"
+  [[ "$p" =~ ^-?[0-9]+$ ]] || p=0
+  ((p < 0)) && p=0
+  ((p > 100)) && p=100
+  printf '%s' "$p"
+}
+__wb_clock_pct() {
+  local cur="${1:-0}" max="${2:-0}"
+  [[ "$cur" =~ ^[0-9]+$ ]] || cur=0
+  [[ "$max" =~ ^[0-9]+$ ]] || max=0
+  if ((max > 0)); then
+    __wb_pct $((cur * 100 / max))
+  else
+    printf '0'
+  fi
+}
+__wb_hist_path() {
+  printf '%s' "${WELCOME_BOARD_MACHINE_HISTORY:-$HOME/.AGENTS/.state/welcome-board-machine-history.tsv}"
+}
+__wb_hist_trim() {
+  local path="$1" tmp
+  [ -f "$path" ] || return 0
+  tmp="${path}.tmp.$$"
+  tail -n 512 "$path" > "$tmp" 2>/dev/null && mv "$tmp" "$path"
+  rm -f "$tmp" 2>/dev/null || true
+}
+__wb_hist_add() {
+  local key="$1" value="$(__wb_pct "$2")" path dir now
+  path="$(__wb_hist_path)"
+  dir=$(dirname "$path")
+  mkdir -p "$dir" 2>/dev/null || return 0
+  now=$(date +%s 2>/dev/null || echo 0)
+  printf '%s\t%s\t%s\n' "$now" "$key" "$value" >> "$path" 2>/dev/null || return 0
+}
+__wb_hist_graph() {
+  local key="$1" value="$(__wb_pct "$2")" path vals count pad v idx out="" levels="▁▂▃▄▅▆▇█"
+  path="$(__wb_hist_path)"
+  __wb_hist_add "$key" "$value"
+  __wb_hist_trim "$path"
+  vals=$(awk -F '\t' -v k="$key" '$2==k {print $3}' "$path" 2>/dev/null | tail -n 8)
+  count=$(printf '%s\n' "$vals" | sed '/^$/d' | wc -l | awk '{print $1}')
+  pad=$((8 - count))
+  while ((pad > 0)); do
+    vals=$(printf '0\n%s' "$vals")
+    pad=$((pad - 1))
+  done
+  while read -r v; do
+    [ -z "$v" ] && continue
+    v=$(__wb_pct "$v")
+    idx=$((v * 7 / 100))
+    out+="${levels:idx:1}"
+  done <<< "$vals"
+  printf '%s' "${out:-▁▁▁▁▁▁▁▁}"
 }
 # instantaneous CPU busy% from a short /proc/stat delta (falls back to load proxy)
 __wb_cpubusy() {
@@ -289,6 +349,9 @@ __wb_machine() {
   for v in gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw; do printf -v "$v" '%s' "${!v// /}"; done
   [ -n "$vt" ] && [ "$vt" -gt 0 ] 2>/dev/null && vpct=$(( ${vu:-0}*100/vt )) || vpct=0
   gpw=${gpw%.*}
+  local gclk_pct mclk_pct
+  gclk_pct=$(__wb_clock_pct "$cgr" "$cgrmax")
+  mclk_pct=$(__wb_clock_pct "$cm" "$cmmax")
   # --- RAM / SWAP / DISK / LOAD ---
   local mu mtot rpct su stot spct du dt dp up l1 l5 l15 lpct ruGB rtGB suGB stGB
   read -r mu mtot < <(free -m 2>/dev/null | awk '/^Mem:/{print $3,$2}')
@@ -305,13 +368,20 @@ __wb_machine() {
   stGB=$(awk -v t="${stot:-0}" 'BEGIN{printf "%.0f", t/1024}')
   # --- render: gauges align in one column; in each used/total pair the USED
   #     value is bright/gradient and the TOTAL is dim, so the two never blend ---
-  __wb_mrow "CPU"  "${cbusy:-0}" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz · ${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}°C"
-  __wb_mrow "GPU"  "${gutil:-0}" "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C ${WB_DM}· ${WB_WHT}${gpw:-?}${WB_DM} W"
-  __wb_mrow "VRAM" "${vpct}"     "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB · mem clk ${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
-  __wb_mrow "RAM"  "${rpct}"     "$(__wb_grad "$rpct")${ruGB}${WB_DM}/${rtGB} GB"
-  __wb_mrow "SWAP" "${spct}"     "$(__wb_grad "$spct")${suGB}${WB_DM}/${stGB} GB"
-  __wb_mrow "DISK" "${dp:-0}"    "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root fs"
-  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}"
+  __wb_msub "PRESSURE"
+  __wb_mrow "CPU"  "${cbusy:-0}" "$(__wb_hist_graph cpu "${cbusy:-0}")" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz"
+  __wb_mrow "GPU"  "${gutil:-0}" "$(__wb_hist_graph gpu "${gutil:-0}")" "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${gpw:-?}${WB_DM} W"
+  __wb_mrow "VRAM" "${vpct}"     "$(__wb_hist_graph vram "${vpct:-0}")" "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB"
+  __wb_mrow "RAM"  "${rpct}"     "$(__wb_hist_graph ram "${rpct:-0}")" "$(__wb_grad "$rpct")${ruGB}${WB_DM}/${rtGB} GB"
+  __wb_mrow "SWAP" "${spct}"     "$(__wb_hist_graph swap "${spct:-0}")" "$(__wb_grad "$spct")${suGB}${WB_DM}/${stGB} GB"
+  __wb_mrow "DISK" "${dp:-0}"    "$(__wb_hist_graph disk "${dp:-0}")" "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root fs"
+  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
+  __wb_msub "TEMP"
+  __wb_mrow "CTEMP" "$(__wb_pct "${ctemp:-0}")" "$(__wb_hist_graph ctemp "${ctemp:-0}")" "${WB_DEV}CPU${WB_DM} · ${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}°C"
+  __wb_mrow "GTEMP" "$(__wb_pct "${gtemp:-0}")" "$(__wb_hist_graph gtemp "${gtemp:-0}")" "${WB_DEV}GPU${WB_DM} · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C"
+  __wb_msub "CLOCKS"
+  __wb_mrow "GCLK" "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_DEV}graphics${WB_DM} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
+  __wb_mrow "MCLK" "$mclk_pct" "$(__wb_hist_graph mclk "$mclk_pct")" "${WB_DEV}memory${WB_DM} · ${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
 }
 
 # ---- NETWORK (tailscale topology + xtreme serving) -------------------------
