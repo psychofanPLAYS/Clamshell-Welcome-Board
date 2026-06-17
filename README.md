@@ -9,7 +9,7 @@ Please do this safely:
 2. Read README.md, docs/PORT_SECURITY_MODEL.md, and docs/LLM_EXTENSION_GUIDE.md.
 3. Ask me for my display name, banner text, preferred color theme, and which sections I want.
 4. Run the install/setup flow only after showing me what files will change.
-5. Do not change firewall rules, close ports, edit SSH settings, or make security changes unless I explicitly approve an apply step.
+5. Do not change firewall rules, close ports, edit SSH settings, or make security changes unless I explicitly approve a separate future security change.
 6. Run the repo tests and a render preview before calling it done.
 7. Leave me with the commands `wb`, `welcomeboard`, `wb help`, and `wb theme`.
 ```
@@ -17,6 +17,8 @@ Please do this safely:
 Prompt file: [prompts/install-with-agent.md](prompts/install-with-agent.md)
 
 # Clamshell Welcome Board
+
+[![test](https://github.com/psychofanPLAYS/Clamshell-Welcome-Board/actions/workflows/test.yml/badge.svg)](https://github.com/psychofanPLAYS/Clamshell-Welcome-Board/actions/workflows/test.yml)
 
 A fast, pretty terminal welcome board for Linux and macOS shells.
 
@@ -30,8 +32,8 @@ It is designed for people who want a useful first screen when they open a termin
 - Shows CPU, GPU, VRAM, RAM, swap, disk, load, CPU temperature, GPU temperature, and GPU clocks when available.
 - Keeps tiny local rolling metric points for fixed-width mini line graphs.
 - Provides an optional rolling 7-day Claude/Codex CLI update notice.
-- Includes a reusable `wb` / `welcomeboard` command with setup, help, theme, sections, and read-only port scan commands.
-- Treats port lockdown as a safe wizard: scan, explain, dry-run, ask, then apply only with explicit approval.
+- Includes a reusable `wb` / `welcomeboard` command with setup, help, theme, sections, doctor, and read-only port scan commands.
+- Treats port lockdown as a safe read-only wizard: scan, explain, and dry-run plan only.
 
 ## Target Experience
 
@@ -55,12 +57,25 @@ How to read the machine rows:
 
 - `8t` means eight CPU threads/logical CPUs.
 - NVIDIA `P8` is a GPU performance state, usually a low-power idle state.
+- The CPU clock pair is current/max GHz. On an i7-6700HQ, for example, `2.70/3.50 GHz` means the current average is near 2.70 GHz and the kernel reports a 3.50 GHz max/turbo limit.
 - `CTEMP` and `GTEMP` are CPU and GPU temperatures.
 - `GCLK` and `MCLK` are GPU graphics and memory clocks as current/max MHz.
 
-## Install Today
+## First Run
 
-Linux/macOS installer:
+Clone the repo, install the commands, then run setup:
+
+```bash
+git clone https://github.com/psychofanPLAYS/Clamshell-Welcome-Board.git
+cd Clamshell-Welcome-Board
+./install.sh
+wb setup
+wb doctor
+```
+
+`wb doctor` is read-only. It reports platform, config, installed command paths, optional tools, and which port scanner is available.
+
+## Install Details
 
 ```bash
 ./install.sh
@@ -96,10 +111,8 @@ The `wb setup` command asks:
 - Your display name.
 - Banner text.
 - Theme: `cyan-dark`, `amber-terminal`, `green-phosphor`, or `mono-safe`.
-- Platform: auto-detected Linux/macOS, user-confirmed.
 - Sections to enable in the board: `machine`, `tmux`, `network`, `locks`, `services`, `commands`.
-- Port scanning stays separate as `wb ports scan`; the update notice stays separate as the shell hook shown above.
-- Whether to generate a port-security report only, or also prepare a firewall dry run.
+- Port scanning stays separate as `wb ports scan`, `wb ports explain`, and `wb ports plan`; the update notice stays separate as the shell hook shown above.
 
 Commands:
 
@@ -110,6 +123,7 @@ wb help
 wb setup
 wb theme
 wb sections
+wb doctor
 wb ports scan
 wb ports explain
 wb ports plan
@@ -123,6 +137,7 @@ wb ports plan
 bash -n welcome-board.sh
 python3 -m py_compile codex-claude-daily-update
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+wb doctor
 ```
 
 Render a plain preview:
@@ -150,9 +165,16 @@ macOS:
 
 - No cloud upload by default.
 - No secrets should be stored in the repo.
-- Firewall/port lockdown must be opt-in and reversible.
+- Firewall/port lockdown is not applied by this version; port commands are read-only scan/explain/plan helpers.
 - Local machine names, private IPs, and personal aliases should live in user config, not committed defaults.
 - AI agents should follow [docs/LLM_EXTENSION_GUIDE.md](docs/LLM_EXTENSION_GUIDE.md) before editing.
+
+## Reliability Notes
+
+- CI runs shell syntax and unit tests on Ubuntu and macOS.
+- Public shell scripts avoid Bash 4-only constructs so macOS `/bin/bash` 3.2 can run them.
+- Missing optional tools degrade gracefully: no `tmux` means an explicit `not installed` row, no NVIDIA tooling means GPU details fall back instead of crashing, and Apple GPU temperature/clock data renders as `not exposed`.
+- `wb doctor` is the first support command to run on a new machine.
 
 ## Roadmap
 

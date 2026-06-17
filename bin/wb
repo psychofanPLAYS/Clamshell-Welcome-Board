@@ -20,6 +20,7 @@ Usage:
   wb theme           Show available themes
   wb theme NAME      Set theme
   wb sections        Show configured sections
+  wb doctor          Read-only install/readiness check
   wb ports scan      Read-only listening-port scan
   wb ports explain   Read-only plain-English port explanation
   wb ports plan      Print a dry-run lockdown plan
@@ -28,8 +29,8 @@ Also installed:
   welcomeboard -> wb
 
 Safety:
-  wb ports scan/explain/plan are read-only. Firewall changes belong in a
-  future explicit apply flow and are not implemented here.
+  wb ports scan/explain/plan are read-only. Firewall changes are not
+  implemented here.
 EOF
 }
 
@@ -129,6 +130,49 @@ wb_sections() {
   printf 'Sections: %s\n' "${sections:-machine tmux commands}"
 }
 
+wb_doctor_cmd() {
+  local label="$1" cmd="$2"
+  if command -v "$cmd" >/dev/null 2>&1; then
+    printf '  %-12s ok (%s)\n' "$label" "$(command -v "$cmd")"
+  else
+    printf '  %-12s missing\n' "$label"
+  fi
+}
+
+wb_doctor() {
+  local platform scanner="missing"
+  platform="$(uname -s 2>/dev/null || printf unknown)"
+  if command -v ss >/dev/null 2>&1; then
+    scanner="ss"
+  elif command -v lsof >/dev/null 2>&1; then
+    scanner="lsof"
+  elif command -v netstat >/dev/null 2>&1; then
+    scanner="netstat"
+  fi
+
+  printf 'Welcome Board doctor\n'
+  printf 'platform: %s\n' "$platform"
+  printf 'bash: %s\n' "${BASH_VERSION:-unknown}"
+  if [ -r "$WB_CONFIG" ]; then
+    printf 'config: ok (%s)\n' "$WB_CONFIG"
+  else
+    printf 'config: not created yet (run wb setup)\n'
+  fi
+  if [ -r "$WB_BOARD_FILE" ]; then
+    printf 'board: ok (%s)\n' "$WB_BOARD_FILE"
+  else
+    printf 'board: missing (%s)\n' "$WB_BOARD_FILE"
+  fi
+  printf 'port scanner: %s\n' "$scanner"
+  printf 'commands:\n'
+  wb_doctor_cmd wb wb
+  wb_doctor_cmd welcomeboard welcomeboard
+  wb_doctor_cmd tmux tmux
+  wb_doctor_cmd figlet figlet
+  wb_doctor_cmd nvidia-smi nvidia-smi
+  printf 'No files, services, ports, or firewall rules were changed.\n'
+}
+
 wb_ports_scan() {
   if command -v ss >/dev/null 2>&1; then
     ss -tuln
@@ -219,8 +263,8 @@ wb_ports_report() {
 
 Step 2: ask the user which LAN-visible ports they personally use.
 Step 3: keep SSH only when another login path or local console is confirmed.
-Step 4: generate firewall commands for the user's OS in a separate apply step.
-Step 5: save rollback commands before applying anything.
+Step 4: if a future version generates firewall commands, review them separately.
+Step 5: save rollback commands before any future mutating security change.
 
 This command is a dry run. It does not enable ufw, pfctl, iptables, nft, or any firewall.
 EOF
@@ -239,6 +283,7 @@ case "$cmd" in
   render) wb_render ;;
   help|-h|--help) wb_usage ;;
   setup) wb_setup ;;
+  doctor) wb_doctor ;;
   theme)
     if [ "${2:-}" ]; then wb_theme_set "$2"; else wb_theme_list; fi
     ;;

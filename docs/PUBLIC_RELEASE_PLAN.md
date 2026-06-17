@@ -9,10 +9,11 @@ This repo started as a personal shell board. The public version needs a config-f
 - Banner regenerates from the configured text.
 - Setup asks for a color theme and offers a few choices.
 - Commands exist: `welcomeboard`, `wb`, `wb help`, `wb theme`.
+- Support command exists: `wb doctor`.
 - Setup asks which sections to enable.
 - Machine section remains core.
 - Add tmux section showing active sessions.
-- Port lockdown is available as a safe scan/plan/apply flow.
+- Port lockdown is available as safe read-only scan/explain/plan commands. Apply/rollback are intentionally not implemented in this version.
 - Future LLMs know how to add sections safely.
 - Repo is safe to make public only after personal defaults are removed.
 
@@ -94,11 +95,10 @@ Public command shape:
 wb ports scan
 wb ports explain
 wb ports plan
-wb ports apply
-wb ports rollback
 ```
 
 The board may show port summaries later, but shell startup must stay read-only.
+Any future apply/rollback flow must be a separate, explicit, reversible command that asks for user approval and is covered by tests.
 
 ## CPU/GPU Notes
 
@@ -106,6 +106,7 @@ The current Linux machine row displays:
 
 - `8t`: eight CPU threads.
 - NVIDIA `P8`: NVIDIA performance state 8, normally a low-power idle state.
+- CPU clock pair: current/max GHz, not base/max. For example, `2.70/3.50 GHz` means the current average is near 2.70 GHz and the kernel reports 3.50 GHz as the max/turbo limit.
 - `GCLK`: graphics clock as current/max MHz.
 - `MCLK`: memory clock as current/max MHz.
 
@@ -120,7 +121,10 @@ The repo is public-ready only when:
 - `wb help`, `wb theme`, and `welcomeboard` work.
 - Tmux section is implemented and tested.
 - Port scan/plan is read-only by default and tested.
+- `wb doctor` reports readiness without mutating files or system state.
 - README install path matches real commands.
 - License exists.
+- A screenshot or demo output artifact exists.
 - Secret scan passes.
+- GitHub Actions are green on Linux and macOS.
 - GitHub visibility is changed only after explicit user approval.

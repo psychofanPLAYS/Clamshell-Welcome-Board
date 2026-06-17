@@ -61,6 +61,7 @@ class WbCliTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIn("wb setup", result.stdout)
         self.assertIn("wb theme", result.stdout)
+        self.assertIn("wb doctor", result.stdout)
         self.assertIn("wb ports scan", result.stdout)
         self.assertIn("read-only", result.stdout)
 
@@ -94,6 +95,20 @@ class WbCliTests(unittest.TestCase):
             self.assertIn('WB_BANNER_TEXT="WORKBOX"', config)
             self.assertIn('WB_THEME="green-phosphor"', config)
             self.assertIn('WB_SECTIONS="machine tmux ports"', config)
+
+    def test_doctor_reports_readiness_without_mutating(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            home = Path(raw_tmp)
+            result = run_wb("doctor", home=home)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Welcome Board doctor", result.stdout)
+            self.assertIn("platform:", result.stdout)
+            self.assertIn("config:", result.stdout)
+            self.assertIn("board:", result.stdout)
+            self.assertIn("commands:", result.stdout)
+            self.assertIn("No files, services, ports, or firewall rules were changed.", result.stdout)
+            self.assertFalse((home / ".config" / "welcome-board" / "config").exists())
 
     def test_ports_unknown_command_does_not_apply_anything(self) -> None:
         result = run_wb("ports", "apply")

@@ -1,10 +1,10 @@
 # Port Security Model
 
-This project can help a user understand and lock down listening ports, but it must be conservative.
+This project can help a user understand listening ports and prepare a lockdown discussion, but this version must stay read-only.
 
 ## Rule
 
-Never close ports, change firewall rules, edit SSH settings, or block inbound traffic without an explicit apply step approved by the user.
+Never close ports, change firewall rules, edit SSH settings, or block inbound traffic from this repo's current commands. A future mutating version needs a separate design, tests, explicit user approval, and rollback receipts.
 
 ## Safe Flow
 
@@ -24,14 +24,10 @@ Never close ports, change firewall rules, edit SSH settings, or block inbound tr
    - Treat SSH and remote-access tools as high-risk to modify.
 
 4. **Plan**
-   - Write a dry-run firewall plan.
-   - Include exact commands and a rollback command.
-   - Do not execute the plan yet.
-
-5. **Apply**
-   - Apply only if the user explicitly approves.
-   - Save a rollback receipt before changing anything.
-   - Re-scan after applying.
+   - Print a dry-run review plan.
+   - Do not write files.
+   - Do not print commands that could be pasted blindly.
+   - Do not execute anything.
 
 ## What The Welcome Board May Show
 
@@ -54,21 +50,19 @@ PORTS  check 0.0.0.0:3000 · run wb ports scan
 - Must not infer that every non-loopback listener is malicious.
 - Must not print secrets, tokens, or environment values.
 
-## Future Commands
+## Commands
 
 ```bash
 wb ports scan       # read-only raw scanner output
 wb ports explain    # read-only classification and plain-language notes
 wb ports plan       # prints a dry-run plan; writes and applies nothing
-wb ports apply      # mutating, explicit approval only
-wb ports rollback   # mutating, restores last saved plan
 ```
 
 Current implementation status:
 
 - `scan`, `explain`, and `plan` exist.
 - `plan` does not write files and does not print commands such as `ufw enable`.
-- `apply` and `rollback` are intentionally refused until a future version has an approval and rollback model.
+- `apply` and `rollback` are intentionally refused because they would mutate firewall state.
 
 ## Public Repo Requirement
 
@@ -80,3 +74,5 @@ Any port-security feature must ship with tests for:
 - Unknown process names.
 - Dry-run plan generation.
 - Refusal to apply without approval.
+
+Any future mutating feature must also test rollback receipt creation, SSH lockout protection, and refusal to run from shell startup.
