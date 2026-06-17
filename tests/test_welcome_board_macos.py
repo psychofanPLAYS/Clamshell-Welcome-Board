@@ -54,7 +54,7 @@ def render_macos_machine(home: Path) -> str:
     env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     command = f"source {SCRIPT}; __wb_paint; WB_FRAME_ON=1; WB_FRAME_INNER=78; WB_W=78; WB_ZW=78; __wb_machine"
     result = subprocess.run(
-        ["bash", "-lc", command],
+        ["bash", "-c", command],
         env=env,
         text=True,
         capture_output=True,

@@ -28,6 +28,12 @@ class BashCompatibilityTests(unittest.TestCase):
         self.assertIn("macos-latest", workflow)
         self.assertIn("matrix.os", workflow)
 
+    def test_fixture_shells_do_not_use_login_mode(self) -> None:
+        login_shell_invocation = '["bash", "' + '-lc"'
+        for path in (REPO_ROOT / "tests").glob("test_*.py"):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn(login_shell_invocation, text, f"{path.name} uses a login shell that can rewrite PATH")
+
 
 if __name__ == "__main__":
     unittest.main()

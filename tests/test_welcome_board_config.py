@@ -28,7 +28,7 @@ def render_with_config(home: Path, config_text: str) -> str:
     env["WELCOME_BOARD_CONFIG"] = str(config)
     env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     result = subprocess.run(
-        ["bash", "-lc", f"source {SCRIPT}; __wb_render"],
+        ["bash", "-c", f"source {SCRIPT}; __wb_render"],
         env=env,
         text=True,
         capture_output=True,
