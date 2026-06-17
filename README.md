@@ -181,6 +181,10 @@ macOS:
 - Missing optional tools degrade gracefully: no `tmux` means an explicit `not installed` row, no NVIDIA tooling means GPU details fall back instead of crashing, and Apple GPU temperature/clock data renders as `not exposed`.
 - `wb doctor` is the first support command to run on a new machine.
 
+## Contributing
+
+Contribution notes, safety rules, and PR verification steps live in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Roadmap
 
 - Pick and add a `LICENSE` file before public redistribution.
