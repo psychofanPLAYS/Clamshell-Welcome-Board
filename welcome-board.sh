@@ -491,6 +491,8 @@ __wb_greeting_row() {
 # --- machine helpers (history sparkline engine, ported intact) ---------------
 __wb_pct() { local p="${1:-0}"; [[ "$p" =~ ^-?[0-9]+$ ]] || p=0; ((p<0))&&p=0; ((p>100))&&p=100; printf '%s' "$p"; }
 __wb_clock_pct() { local c="${1:-0}" m="${2:-0}"; [[ "$c" =~ ^[0-9]+$ ]]||c=0; [[ "$m" =~ ^[0-9]+$ ]]||m=0; ((m>0)) && __wb_pct $((c*100/m)) || printf '0'; }
+# temp → % of the 30→100°C thermal range, so the gauge means "thermal headroom used" (NOT raw °C as %)
+__wb_temppct() { local t="${1:-0}"; [[ "$t" =~ ^[0-9]+$ ]] || t=0; local p=$(( (t-30)*100/70 )); ((p<0))&&p=0; ((p>100))&&p=100; printf '%s' "$p"; }
 __wb_hist_path() { printf '%s' "${WELCOME_BOARD_MACHINE_HISTORY:-$HOME/.local/state/welcome-board/machine-series.tsv}"; }
 __wb_hist_trim() { local p="$1" t; [ -f "$p" ] || return 0; t="${p}.tmp.$$"; tail -n 1024 "$p" >"$t" 2>/dev/null && mv "$t" "$p"; rm -f "$t" 2>/dev/null||true; }
 __wb_hist_add()  { local k="$1" v; v="$(__wb_pct "$2")"; local p d; p="$(__wb_hist_path)"; d=$(dirname "$p"); mkdir -p "$d" 2>/dev/null||return 0; printf '%s\t%s\t%s\n' "$(date +%s 2>/dev/null||echo 0)" "$k" "$v" >>"$p" 2>/dev/null||return 0; }
@@ -550,13 +552,15 @@ __wb_machine() {
   ruGB=$(awk -v u="${mu:-0}" 'BEGIN{printf "%.1f",u/1024}'); rtGB=$(awk -v t="${mtot:-0}" 'BEGIN{printf "%.0f",t/1024}')
   suGB=$(awk -v u="${su:-0}" 'BEGIN{printf "%.1f",u/1024}'); stGB=$(awk -v t="${stot:-0}" 'BEGIN{printf "%.0f",t/1024}')
   # GPU
-  local gpu gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw vpct gclk_pct mclk_pct v
-  gpu=$(nvidia-smi --query-gpu=name,pstate,utilization.gpu,temperature.gpu,memory.used,memory.total,clocks.gr,clocks.max.gr,clocks.mem,clocks.max.mem,power.draw --format=csv,noheader,nounits 2>/dev/null | head -1)
-  IFS=',' read -r gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw <<<"$gpu"
+  local gpu gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl vpct ppct gclk_pct mclk_pct v
+  gpu=$(nvidia-smi --query-gpu=name,pstate,utilization.gpu,temperature.gpu,memory.used,memory.total,clocks.gr,clocks.max.gr,clocks.mem,clocks.max.mem,power.draw,enforced.power.limit --format=csv,noheader,nounits 2>/dev/null | head -1)
+  IFS=',' read -r gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl <<<"$gpu"
   gname=$(printf '%s' "$gname" | sed -E 's/^ *//; s/NVIDIA //; s/GeForce //'); : "${gname:=no GPU}"
-  for v in gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw; do printf -v "$v" '%s' "${!v// /}"; done
+  for v in gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl; do printf -v "$v" '%s' "${!v// /}"; done
   [ -n "$vt" ] && [ "$vt" -gt 0 ] 2>/dev/null && vpct=$(( ${vu:-0}*100/vt )) || vpct=0
-  gpw=${gpw%.*}; gclk_pct=$(__wb_clock_pct "$cgr" "$cgrmax"); mclk_pct=$(__wb_clock_pct "$cm" "$cmmax")
+  gpw=${gpw%.*}; gpl=${gpl%.*}
+  [ -n "$gpl" ] && [ "$gpl" -gt 0 ] 2>/dev/null && ppct=$(( ${gpw:-0}*100/gpl )) || ppct=0
+  gclk_pct=$(__wb_clock_pct "$cgr" "$cgrmax"); mclk_pct=$(__wb_clock_pct "$cm" "$cmmax")
   # DISK
   local du dt dp
   read -r du dt dp < <(df -BG --output=used,size,pcent / 2>/dev/null | tail -1 | tr -d 'G%')
@@ -566,24 +570,27 @@ __wb_machine() {
   lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{p=x/n*100;p=(p>100)?100:p;printf "%d",p}')
   up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/ weeks\?/w/;s/,//g')
 
-  __wb_msub "CPU"
-  __wb_mrow  "USAGE" "${cbusy:-0}"             "$(__wb_hist_graph cpu "${cbusy:-0}")"   "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz"
-  __wb_mrow  "TEMP"  "$(__wb_pct "${ctemp:-0}")" "$(__wb_hist_graph ctemp "${ctemp:-0}")" "${WB_DEV}package${WB_DM} · ${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}°C"
+  # hardware names live in the group sub-headers; every metric row's VALUE starts in the
+  # same column so the section reads as clean, even columns.
+  __wb_msub "CPU" "${cbrand}"
+  __wb_mrow  "USAGE" "${cbusy:-0}" "$(__wb_hist_graph cpu "${cbusy:-0}")" "${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz ${WB_DM}· ${WB_WHT}${cores}${WB_DM} threads"
+  __wb_mrow  "TEMP"  "$(__wb_temppct "${ctemp:-0}")" "$(__wb_hist_graph ctemp "$(__wb_temppct "${ctemp:-0}")")" "${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}${WB_DM} °C"
   __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
   __wb_plainrow ""
   __wb_msub "RAM"
   __wb_mrow  "USED"  "${rpct}" "$(__wb_hist_graph ram "${rpct:-0}")"  "$(__wb_grad "$rpct")${ruGB}${WB_DM}/${rtGB} GB"
   __wb_mrow  "SWAP"  "${spct}" "$(__wb_hist_graph swap "${spct:-0}")" "$(__wb_grad "$spct")${suGB}${WB_DM}/${stGB} GB"
   __wb_plainrow ""
-  __wb_msub "GPU"
-  __wb_mrow  "USAGE" "${gutil:-0}"             "$(__wb_hist_graph gpu "${gutil:-0}")"   "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${gpw:-?}${WB_DM} W"
-  __wb_mrow  "TEMP"  "$(__wb_pct "${gtemp:-0}")" "$(__wb_hist_graph gtemp "${gtemp:-0}")" "${WB_DEV}core${WB_DM} · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C"
+  __wb_msub "GPU" "${gname}"
+  __wb_mrow  "USAGE" "${gutil:-0}" "$(__wb_hist_graph gpu "${gutil:-0}")" "${WB_DM}perf state ${WB_WHT}${gp:-?}"
+  __wb_mrow  "POWER" "${ppct:-0}" "$(__wb_hist_graph gpow "${ppct:-0}")" "$(__wb_grad "${ppct:-0}")${gpw:-?}${WB_DM}/${gpl:-?} W"
+  __wb_mrow  "TEMP"  "$(__wb_temppct "${gtemp:-0}")" "$(__wb_hist_graph gtemp "$(__wb_temppct "${gtemp:-0}")")" "${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}${WB_DM} °C"
   __wb_mrow  "VRAM"  "${vpct}" "$(__wb_hist_graph vram "${vpct:-0}")"  "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB"
-  __wb_mrow  "CORE"  "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_DEV}graphics${WB_DM} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
-  __wb_mrow  "MEMCLK" "$mclk_pct" "$(__wb_hist_graph mclk "$mclk_pct")" "${WB_DEV}memory${WB_DM} · ${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
+  __wb_mrow  "CORE"  "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
+  __wb_mrow  "MEMCLK" "$mclk_pct" "$(__wb_hist_graph mclk "$mclk_pct")" "${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
   __wb_plainrow ""
   __wb_msub "DISK"
-  __wb_mrow  "ROOT"  "${dp:-0}" "$(__wb_hist_graph disk "${dp:-0}")"  "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · /"
+  __wb_mrow  "ROOT"  "${dp:-0}" "$(__wb_hist_graph disk "${dp:-0}")"  "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB"
 }
 
 __wb_machine_macos() {
@@ -668,15 +675,24 @@ __wb_hermes() {
   __wb_zrow "${WB_DM}full cheat-sheet any time: ${WB_CYN}hkeys"
 }
 
-# --- COMMANDS: deduped + curated to what you actually reach for -------------
+# --- COMMANDS: universal defaults + the user's own shortcuts from a config file
+#  Personal shortcuts (ssh hosts, secrets, lid, etc.) live in
+#  ${WB_CUSTOM_COMMANDS_FILE:-~/.config/welcome-board/commands} as 'label|command|hint'
+#  rows — so the SHIPPED default stays generic and nobody's machine names leak.
 __wb_cmdrow() { __wb_zrow "${WB_PNK}${WB_B}$(printf '%-9s' "$1")${WB_FR} ${2}"; }
 __wb_commands() {
   __wb_hdr "COMMANDS"; __wb_zreset
-  __wb_cmdrow "update"  "${WB_CYN}update-all${WB_FR} ${WB_D}apt·snap·node·npm·uv·gh + claude + codex${WB_FR}   ${WB_CYN}restart${WB_FR} ${WB_D}reload shell"
-  __wb_cmdrow "board"   "${WB_CYN}clamboard${WB_FR} ${WB_D}reprint this${WB_FR}   ${WB_CYN}clamhelp${WB_FR} ${WB_D}every command${WB_FR}   ${WB_CYN}hkeys${WB_FR} ${WB_D}hermes keys"
+  __wb_cmdrow "update"  "${WB_CYN}update-all${WB_FR} ${WB_D}system + AI CLIs${WB_FR}   ${WB_CYN}restart${WB_FR} ${WB_D}reload shell"
+  __wb_cmdrow "board"   "${WB_CYN}clamboard${WB_FR} ${WB_D}reprint${WB_FR}   ${WB_CYN}wb setup${WB_FR} ${WB_D}customize${WB_FR}   ${WB_CYN}clamhelp${WB_FR} ${WB_D}all commands"
   __wb_cmdrow "tmux"    "${WB_CYN}tmux${WB_FR} ${WB_D}list${WB_FR}  ${WB_CYN}tmux 2${WB_FR} ${WB_D}join${WB_FR}  ${WB_CYN}tmux new -s work${WB_FR}  ${WB_CYN}kill 1 2${WB_FR}  ${WB_D}detach ${WB_CYN}C-b d"
-  __wb_cmdrow "remote"  "${WB_CYN}ssh mac${WB_FR}  ${WB_CYN}ssh xtreme${WB_FR}  ${WB_CYN}ssh-reap${WB_FR} ${WB_D}kill ghosts${WB_FR}  ${WB_CYN}lid-on${WB_FR}${WB_D}/${WB_CYN}lid-off-clamshell"
-  __wb_cmdrow "secrets" "${WB_CYN}vault${WB_FR} ${WB_D}edit${WB_FR}  ${WB_CYN}secret get NAME${WB_FR}  ${WB_CYN}secret list${WB_FR}   ${WB_D}values never printed"
+  __wb_cmdrow "network" "${WB_CYN}ssh-sessions${WB_FR} ${WB_D}who's on${WB_FR}  ${WB_CYN}ssh-reap${WB_FR} ${WB_D}kill ghosts${WB_FR}  ${WB_CYN}wb ports explain"
+  local ccf="${WB_CUSTOM_COMMANDS_FILE:-$HOME/.config/welcome-board/commands}" cl cc ch
+  if [ -r "$ccf" ]; then
+    while IFS='|' read -r cl cc ch || [ -n "$cl" ]; do
+      [ -z "$cl" ] && continue; case "$cl" in \#*) continue;; esac
+      __wb_cmdrow "${cl:0:9}" "${WB_CYN}${cc}${WB_FR}${ch:+   ${WB_D}${ch}}"
+    done < "$ccf"
+  fi
 }
 
 # --- FOOTER: killed (it only duplicated COMMANDS) ---------------------------
@@ -688,6 +704,6 @@ __wb_mrow() {
   local g="${3:-▁▁▁▁▁▁▁▁}"
   __wb_zrow "${WB_LBL}$(printf '%-6s' "$1")${WB_FR} $(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-0}")%${WB_FR} ${g}${WB_FR}  $4"
 }
-__wb_msub() { __wb_plainrow "${WB_GOLD}$(printf '%-5s' "$1")${WB_FR}"; }
+__wb_msub() { local s=""; [ -n "${2:-}" ] && s="  ${WB_DM}${2}${WB_FR}"; __wb_plainrow "${WB_GOLD}$(printf '%-6s' "$1")${WB_FR}${s}"; }
 
 if [[ $- == *i* ]] || [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then __wb_render 0; fi

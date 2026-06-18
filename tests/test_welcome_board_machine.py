@@ -75,7 +75,7 @@ def _write_linux_mocks(bin_dir: Path) -> None:
     (bin_dir / "nvidia-smi").write_text(
         "#!/usr/bin/env bash\n"
         "printf '%s\\n' "
-        "'NVIDIA GeForce GTX 1060, P8, 19, 49, 3830, 6078, 139, 1911, 405, 4004, 18.2'\n",
+        "'NVIDIA GeForce GTX 1060, P8, 19, 49, 3830, 6078, 139, 1911, 405, 4004, 18.2, 120.0'\n",
         encoding="utf-8",
     )
     for path in bin_dir.iterdir():
@@ -116,7 +116,7 @@ class MachineSectionTests(unittest.TestCase):
         # Each metric row carries an 8-cell █░ gauge bar followed by a percent.
         import re as _re
         bar_re = _re.compile(r"[█░]{8}\s+\d+%")
-        for label in ("USAGE", "TEMP", "LOAD", "USED", "SWAP", "VRAM", "CORE", "MEMCLK", "ROOT"):
+        for label in ("USAGE", "POWER", "TEMP", "LOAD", "USED", "SWAP", "VRAM", "CORE", "MEMCLK", "ROOT"):
             # Rows look like:  │ LABEL  ████░░░░  NN%  <spark>  detail
             label_line = next(
                 (l for l in rendered.splitlines() if re.search(r"│ " + label + r"\b", l)),
