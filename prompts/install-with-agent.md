@@ -15,12 +15,11 @@ Do this:
    - display name
    - banner text
    - color theme: cyan-dark, amber-terminal, green-phosphor, light-paper, or mono-safe
-   - enabled board sections; default should be: machine services identity security health hermes tmux commands notes
+   - rendered board sections; the board currently shows MACHINE, NETWORK, SECURITY, SERVICES, AUTOMATION, HERMES, and COMMANDS
    - tmux workflow and any custom tmux commands I use
    - custom commands or path shortcuts I want visible at a glance
    - service ports I intentionally run and want watched, as name:port pairs
    - whether I use Hermes; if yes, ask for my master command aliases such as m1, m1c, m1s, m1g, m1up, m1down, m1re, m2, m2c, m2s, m2g, m2up, m2down, and m2re
-   - whether I have OpenClaw; if yes, ask for its path and what commands should be shown
    - whether I want to create a reviewed port baseline with wb ports snapshot
    - whether I want a separate future default-deny firewall plan
 4. Show me exactly which files will change before editing shell startup files.

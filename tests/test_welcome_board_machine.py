@@ -116,7 +116,7 @@ class MachineSectionTests(unittest.TestCase):
         # Each metric row carries an 8-cell █░ gauge bar followed by a percent.
         import re as _re
         bar_re = _re.compile(r"[█░]{8}\s+\d+%")
-        for label in ("USAGE", "TEMP", "LOAD", "USED", "SWAP", "VRAM", "CLOCK", "ROOT"):
+        for label in ("USAGE", "TEMP", "LOAD", "USED", "SWAP", "VRAM", "CORE", "MEMCLK", "ROOT"):
             # Rows look like:  │ LABEL  ████░░░░  NN%  <spark>  detail
             label_line = next(
                 (l for l in rendered.splitlines() if re.search(r"│ " + label + r"\b", l)),

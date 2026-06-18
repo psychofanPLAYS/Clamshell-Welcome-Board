@@ -26,7 +26,6 @@ class AgentSkillArtifactTests(unittest.TestCase):
             "custom commands",
             "default-deny",
             "Hermes",
-            "OpenClaw",
             "wb ports snapshot",
             "Run ./install.sh",
             "Run wb setup",
@@ -35,6 +34,8 @@ class AgentSkillArtifactTests(unittest.TestCase):
             "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v",
         ):
             self.assertIn(required, skill)
+        # OpenClaw is a private/deleted internal tool — it must NOT ship in the public skill.
+        self.assertNotIn("OpenClaw", skill)
         self.assertIsNone(re.search(r"\b(claw" + r"ski|Da" + r"wid|192\.168\.|/home/claw" + r"ski)\b", skill))
 
 

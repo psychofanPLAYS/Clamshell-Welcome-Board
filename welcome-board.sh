@@ -503,9 +503,10 @@ __wb_hist_graph() {
   vals=$(awk -F '\t' -v k="$key" '$2==k {print $3}' "$path" 2>/dev/null | tail -n "$n")
   count=$(printf '%s\n' "$vals" | sed '/^$/d' | wc -l | awk '{print $1}')
   pad=$((n - count)); while ((pad>0)); do vals=$(printf '0\n%s' "$vals"); pad=$((pad-1)); done
-  while read -r v; do [ -z "$v" ] && continue; v=$(__wb_pct "$v"); idx=$((v*7/100)); out+="${levels:idx:1}"; done <<< "$vals"
-  for ((v=0;v<n;v++)); do fb+="${levels:0:1}"; done
-  printf '%s' "${out:-$fb}"
+  # colour each cell by its own value (green→red), so the trend is reactive like the gauge bar
+  while read -r v; do [ -z "$v" ] && continue; v=$(__wb_pct "$v"); idx=$((v*7/100)); out+="$(__wb_grad "$v")${levels:idx:1}"; done <<< "$vals"
+  for ((v=0;v<n;v++)); do fb+="$(__wb_grad 0)${levels:0:1}"; done
+  printf '%s%s' "${out:-$fb}" "$WB_FR"
 }
 # (__wb_mrow + __wb_msub are VARIANT-specific; defined below)
 
@@ -535,7 +536,9 @@ __wb_machine() {
   cbrand=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | sed -E 's/.*: //; s/\(R\)//g; s/\(TM\)//g; s/Intel //; s/Core //; s/ CPU.*//; s/  */ /g; s/^ //'); : "${cbrand:=CPU}"
   cores=$(nproc 2>/dev/null || echo '?')
   ctemp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1); [ -n "$ctemp" ] && ctemp=$((ctemp/1000))
-  cfcur=$(awk '{s+=$1;n++} END{if(n)printf "%.2f",s/n/1e6}' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null)
+  # live freq = fastest core right now (shows turbo under load; avg sits flat at base)
+  cfcur=$(awk -F: '/cpu MHz/{v=$2+0; if(v>m)m=v} END{if(m)printf "%.2f",m/1000}' /proc/cpuinfo 2>/dev/null)
+  [ -z "$cfcur" ] && cfcur=$(awk '$1>m{m=$1} END{if(m)printf "%.2f",m/1e6}' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null)
   cfmax=$(awk '{printf "%.2f",$1/1e6}' /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)
   cbusy=$(__wb_cpubusy)
   # RAM / SWAP
@@ -576,7 +579,8 @@ __wb_machine() {
   __wb_mrow  "USAGE" "${gutil:-0}"             "$(__wb_hist_graph gpu "${gutil:-0}")"   "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${gpw:-?}${WB_DM} W"
   __wb_mrow  "TEMP"  "$(__wb_pct "${gtemp:-0}")" "$(__wb_hist_graph gtemp "${gtemp:-0}")" "${WB_DEV}core${WB_DM} · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C"
   __wb_mrow  "VRAM"  "${vpct}" "$(__wb_hist_graph vram "${vpct:-0}")"  "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB"
-  __wb_mrow  "CLOCK" "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_DEV}graphics${WB_DM} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
+  __wb_mrow  "CORE"  "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_DEV}graphics${WB_DM} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
+  __wb_mrow  "MEMCLK" "$mclk_pct" "$(__wb_hist_graph mclk "$mclk_pct")" "${WB_DEV}memory${WB_DM} · ${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
   __wb_plainrow ""
   __wb_msub "DISK"
   __wb_mrow  "ROOT"  "${dp:-0}" "$(__wb_hist_graph disk "${dp:-0}")"  "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · /"
@@ -682,7 +686,7 @@ __wb_footer() { :; }
 WB_SPARK="▁▂▃▄▅▆▇█"; WB_SPARK_N=8
 __wb_mrow() {
   local g="${3:-▁▁▁▁▁▁▁▁}"
-  __wb_zrow "${WB_LBL}$(printf '%-6s' "$1")${WB_FR} $(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-0}")%${WB_FR} ${WB_CYN}${g}${WB_FR}  $4"
+  __wb_zrow "${WB_LBL}$(printf '%-6s' "$1")${WB_FR} $(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-0}")%${WB_FR} ${g}${WB_FR}  $4"
 }
 __wb_msub() { __wb_plainrow "${WB_GOLD}$(printf '%-5s' "$1")${WB_FR}"; }
 

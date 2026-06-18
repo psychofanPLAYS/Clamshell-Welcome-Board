@@ -22,7 +22,8 @@ class AgentPromptDocsTests(unittest.TestCase):
         self.assertIn("custom commands", prompt)
         self.assertIn("default-deny", prompt)
         self.assertIn("Hermes", prompt)
-        self.assertIn("OpenClaw", prompt)
+        # OpenClaw is a private/deleted internal tool — must NOT appear in the public install prompt.
+        self.assertNotIn("OpenClaw", prompt)
         self.assertIn("wb ports snapshot", prompt)
         self.assertIn("wb setup", prompt)
         self.assertIn("render preview", prompt)

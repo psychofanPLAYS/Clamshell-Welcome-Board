@@ -20,12 +20,12 @@ One framed board, gold section titles on cyan dividers, zebra-striped rows:
 
 | Section | What it tells you, at a glance |
 |---|---|
-| **MACHINE** | CPU / GPU / VRAM / RAM / SWAP / DISK / LOAD gauges with live temps & clocks (NVIDIA when present). |
-| **NETWORK** | Tailscale peers (real probes — no fake "online"), `ssh` remote-login count, live `tmux` sessions. |
-| **SECURITY** | Curated alerts only — unrecognized open ports, drift from a saved baseline. No raw socket dumps. |
+| **MACHINE** | Segregated CPU, RAM, GPU, and DISK readings with live history graphs. |
+| **NETWORK** | Throughput graph plus connectivity status. |
+| **SECURITY** | Exposed-port warning based on the reviewed baseline. |
 | **SERVICES** | Your watched ports as up/down, by friendly name. |
 | **AUTOMATION** | Your own scheduled jobs — user `systemd` timers + cron (system jobs excluded). |
-| **HERMES** | An example agent-command cheat-sheet (`m1`/`m2` lanes) — customize or drop it. |
+| **HERMES** | Agent-command cheat-sheet for the Hermes section. |
 | **COMMANDS** | Copy-paste operator commands: tmux, updates, ssh hygiene, secrets. |
 
 **Design rules:** dark-mode, glance-first, and a hard **symmetry law** — every framed line is exactly the same display width (verified in CI by `tests/check_symmetry.py`). Only width-1 glyphs are used inside the frame, so the right edge never drifts on any terminal.
@@ -43,7 +43,7 @@ https://github.com/psychofanPLAYS/Clamshell-Welcome-Board
 Do this safely:
 1. Clone the repo into a normal projects folder and read README.md + examples/config.example.
 2. Ask me for: display name, banner text, service ports to watch (name:port), network peers,
-   and whether I want the HERMES agent-shortcuts section.
+   and whether I use Hermes agent shortcuts.
 3. Run ./install.sh, then write my answers into ~/.config/welcome-board/config.
 4. Show me which shell-startup lines will be added BEFORE editing ~/.bashrc.
 5. Run `wb doctor`, then `wb ports explain` (read-only). Ask before `wb ports snapshot`.
