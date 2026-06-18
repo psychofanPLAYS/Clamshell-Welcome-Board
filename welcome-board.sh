@@ -72,14 +72,6 @@ __wb_repeat() {
 }
 __wb_frame_top()    { printf '  %s┌%s┐%s\n' "$WB_AC" "$(__wb_repeat '─' "$WB_FRAME_INNER")" "$WB_R"; }
 __wb_frame_bottom() { printf '  %s└%s┘%s\n' "$WB_AC" "$(__wb_repeat '─' "$WB_FRAME_INNER")" "$WB_R"; }
-__wb_hdr() {                                          # blank line above + YELLOW bold title on a subtle divider
-  local lbl="$1" rule
-  rule=$(( WB_FRAME_INNER - ${#lbl} - 3 )); ((rule < 4)) && rule=4
-  __wb_plainrow ""
-  printf '  %s├%s─ %s%s%s %s%s┤%s\n' \
-    "$WB_AC" "$WB_D" "$WB_YEL$WB_B" "$lbl" "$WB_R$WB_D" \
-    "$(__wb_repeat '─' "$rule")" "$WB_AC" "$WB_R"
-}
 __wb_lbl() { printf '%s%-11s%s' "$WB_GRY" "$1" "$WB_R"; }
 
 # visible width = code points after stripping ANSI + the dim sentinel.
@@ -128,19 +120,6 @@ __wb_zrow() {                                         # $1 = WB_FR-reset content
 }
 
 # ---- time-aware greeting (first name only, from config) ---------------------
-__wb_greeting() {
-  local n="${WB_DISPLAY_NAME:-friend}" h; h=$((10#$(date +%H))); local -a p
-  if   [ "$h" -ge 5 ] && [ "$h" -lt 12 ]; then
-    p=("Good morning, $n." "Morning, $n — held all night." "Good morning, $n. Standing by.")
-  elif [ "$h" -ge 12 ] && [ "$h" -lt 17 ]; then
-    p=("Good afternoon, $n." "Afternoon, $n. At your command." "Welcome back, $n.")
-  elif [ "$h" -ge 17 ] && [ "$h" -lt 22 ]; then
-    p=("Good evening, $n." "Evening, $n. Ready when you are." "Good evening, $n. Standing by.")
-  else
-    p=("Working late, $n." "Late night, $n — standing by." "Still here, $n.")
-  fi
-  printf '%s' "${p[RANDOM % ${#p[@]}]}"
-}
 
 # ---- BANNER (brand mark; figlet-style block art + binary subtitle) ----------
 __wb_banner_baked() {   # pre-baked ANSI-Shadow "CLAMSHELL" brand art (default / fallback)
@@ -192,10 +171,6 @@ __wb_banner() {
   bpad=$(( 2 + (fw - ${#binary}) / 2 )); ((bpad < 0)) && bpad=0
   printf '%*s%s%s%s\n' "$bpad" '' "$WB_HDR" "$binary" "$WB_R"
 }
-__wb_greeting_row() {
-  __wb_plainrow ""
-  __wb_plainrow "${WB_HDR}$(__wb_greeting)${WB_R} ${WB_DM}· up $(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/,//g' || echo '?') · $(date '+%a %d %b · %H:%M')"
-}
 
 # ---- MACHINE helpers --------------------------------------------------------
 __wb_grad() {
@@ -214,17 +189,6 @@ __wb_bar() {
 }
 __wb_tcol() { local t="${1:-0}"; [[ "$t" =~ ^[0-9]+$ ]] || { printf '%s' "$WB_GRY"; return; }
   if ((t>=80)); then printf '%s' "$WB_RED"; elif ((t>=70)); then printf '%s' "$WB_YEL"; else printf '%s' "$WB_GRN"; fi; }
-__wb_mrow() {
-  local c
-  c="${WB_LBL}$(printf '%-5s' "$1")${WB_FR}$(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-?}")%${WB_FR}   $3"
-  __wb_zrow "$c"
-}
-__wb_loadrow() {
-  local pct="$1" l1="$2" l5="$3" l15="$4" up="$5" c labels
-  c="${WB_LBL}$(printf '%-5s' 'LOAD')${WB_FR}$(__wb_bar "$pct") ${WB_B}${WB_WHT}$(printf '%3s' "${pct:-0}")%${WB_FR}   ${WB_WHT}$(printf '%5s %5s %5s' "${l1:-?}" "${l5:-?}" "${l15:-?}")${WB_DM} · up ${up:-?}"
-  labels="${WB_D}$(printf '%20s' '')( ${WB_WHT}1m${WB_D} ) · ( ${WB_WHT}5m${WB_D} ) · ( ${WB_WHT}15m${WB_D} )${WB_R}"
-  __wb_zrow "$c"; __wb_plainrow "$labels"
-}
 __wb_cpubusy() {
   local t1 i1 t2 i2 dt di
   read -r t1 i1 < <(awk '/^cpu /{idle=$5+$6;tot=0;for(i=2;i<=NF;i++)tot+=$i;print tot,idle}' /proc/stat 2>/dev/null)
@@ -236,111 +200,8 @@ __wb_cpubusy() {
 }
 
 # ---- MACHINE (Linux: full gauges; macOS: graceful subset) -------------------
-__wb_machine_macos() {
-  __wb_hdr "MACHINE"; __wb_zreset
-  local cbrand cores psize mtot_b mu_pages mu ctot rpct btot bused dt du dp up l1 l5 l15 lpct
-  cbrand=$(sysctl -n machdep.cpu.brand_string 2>/dev/null | sed -E 's/ +\(.*\)$//; s/  */ /g; s/^ //; s/ $//'); : "${cbrand:=Apple Silicon}"
-  cores=$(sysctl -n hw.logicalcpu 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo '?')
-  mtot_b=$(sysctl -n hw.memsize 2>/dev/null); ctot=$(( ${mtot_b:-0}/1073741824 ))
-  psize=$(vm_stat 2>/dev/null | awk -F'of ' '/page size/{gsub(/[^0-9]/,"",$2);print $2;exit}'); : "${psize:=4096}"
-  mu_pages=$(vm_stat 2>/dev/null | awk '/Pages active/{a=$3} /Pages wired/{w=$4} /occupied by compressor/{c=$5} END{gsub(/\./,"",a);gsub(/\./,"",w);gsub(/\./,"",c);print (a+w+c)+0}')
-  mu=$(( ${mu_pages:-0} * ${psize:-4096} / 1073741824 ))
-  [ "${ctot:-0}" -gt 0 ] && rpct=$(( mu*100/ctot )) || rpct=0
-  # BSD df reports 512-byte blocks by default (real macOS + the test mock)
-  read -r btot bused < <(df / 2>/dev/null | awk 'NR==2{print $2,$3}')
-  dt=$(( ${btot:-0} * 512 / 1000000000 )); du=$(( ${bused:-0} * 512 / 1000000000 ))
-  [ "${btot:-0}" -gt 0 ] && dp=$(( bused*100/btot )) || dp=0
-  read -r l1 l5 l15 < <(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{print $1,$2,$3}')
-  : "${l1:=$(uptime 2>/dev/null | sed -E 's/.*averages?: *//; s/,//g' | awk '{print $1}')}"
-  lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{n=(n+0<1)?1:n;x=x+0;p=x/n*100;p=(p>100)?100:p;p=(p<0)?0:p;printf "%d",p}')
-  up=$(uptime 2>/dev/null | sed -E 's/.*up *//; s/,? *[0-9]+ users?.*//; s/,? *load aver.*//; s/  */ /g; s/^ //; s/, *$//')
-  __wb_mrow "CPU"  "${lpct:-0}" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}macOS${WB_DM} · GPU stats not exposed"
-  __wb_mrow "RAM"  "${rpct}"    "$(__wb_grad "$rpct")${mu:-?}${WB_DM}/${ctot:-?} GB"
-  __wb_mrow "DISK" "${dp:-0}"   "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root"
-  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}"
-}
-__wb_machine() {
-  [ "$(__wb_os)" = macos ] && { __wb_machine_macos; return; }
-  __wb_hdr "MACHINE"; __wb_zreset
-  local cbrand cores ctemp cfcur cfmax cbusy v
-  cbrand=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null \
-           | sed -E 's/.*: //; s/\(R\)//g; s/\(TM\)//g; s/Intel //; s/Core //; s/ CPU.*//; s/  */ /g; s/^ //')
-  : "${cbrand:=CPU}"
-  cores=$(nproc 2>/dev/null || echo '?')
-  ctemp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1); [ -n "$ctemp" ] && ctemp=$((ctemp/1000))
-  cfcur=$(awk '{s+=$1;n++} END{if(n)printf "%.2f",s/n/1e6}' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null)
-  cfmax=$(awk '{printf "%.2f",$1/1e6}' /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)
-  cbusy=$(__wb_cpubusy)
-  local gpu gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw vpct
-  gpu=$(nvidia-smi --query-gpu=name,pstate,utilization.gpu,temperature.gpu,memory.used,memory.total,clocks.gr,clocks.max.gr,clocks.mem,clocks.max.mem,power.draw \
-        --format=csv,noheader,nounits 2>/dev/null | head -1)
-  IFS=',' read -r gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw <<<"$gpu"
-  gname=$(printf '%s' "$gname" | sed -E 's/^ *//; s/NVIDIA //; s/GeForce //'); : "${gname:=no GPU}"
-  for v in gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw; do printf -v "$v" '%s' "${!v// /}"; done
-  [ -n "$vt" ] && [ "$vt" -gt 0 ] 2>/dev/null && vpct=$(( ${vu:-0}*100/vt )) || vpct=0
-  gpw=${gpw%.*}
-  local mu mtot rpct su stot spct du dt dp up l1 l5 l15 lpct ruGB rtGB suGB stGB
-  read -r mu mtot < <(free -m 2>/dev/null | awk '/^Mem:/{print $3,$2}')
-  [ -n "$mtot" ] && [ "$mtot" -gt 0 ] 2>/dev/null && rpct=$(( ${mu:-0}*100/mtot )) || rpct=0
-  read -r su stot < <(free -m 2>/dev/null | awk '/^Swap:/{print $3,$2}')
-  [ -n "$stot" ] && [ "$stot" -gt 0 ] 2>/dev/null && spct=$(( ${su:-0}*100/stot )) || spct=0
-  read -r du dt dp < <(df -BG --output=used,size,pcent / 2>/dev/null | tail -1 | tr -d 'G%')
-  read -r l1 l5 l15 _ < /proc/loadavg 2>/dev/null
-  lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{p=x/n*100;p=(p>100)?100:p;printf "%d",p}')
-  up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/ weeks\?/w/;s/,//g')
-  ruGB=$(awk -v u="${mu:-0}" 'BEGIN{printf "%.1f", u/1024}')
-  rtGB=$(awk -v t="${mtot:-0}" 'BEGIN{printf "%.0f", t/1024}')
-  suGB=$(awk -v u="${su:-0}" 'BEGIN{printf "%.1f", u/1024}')
-  stGB=$(awk -v t="${stot:-0}" 'BEGIN{printf "%.0f", t/1024}')
-  __wb_mrow "CPU"  "${cbusy:-0}" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz · ${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}°C"
-  __wb_mrow "GPU"  "${gutil:-0}" "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C ${WB_DM}· ${WB_WHT}${gpw:-?}${WB_DM} W"
-  __wb_mrow "VRAM" "${vpct}"     "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB · mem clk ${WB_WHT}${cm:-?}${WB_DM}/${cmmax:-?} MHz"
-  __wb_mrow "RAM"  "${rpct}"     "$(__wb_grad "$rpct")${ruGB}${WB_DM}/${rtGB} GB"
-  __wb_mrow "SWAP" "${spct}"     "$(__wb_grad "$spct")${suGB}${WB_DM}/${stGB} GB"
-  __wb_mrow "DISK" "${dp:-0}"    "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root fs"
-  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}"
-}
 
 # ---- NETWORK + SESSIONS (real probes only — tailscale + TCP + who + tmux) ----
-__wb_network() {
-  __wb_hdr "NETWORK"
-  local ts self peer nm match probe ip st
-  ts=$(timeout 1 tailscale status 2>/dev/null)
-  self=$(hostname 2>/dev/null | cut -d. -f1)
-  __wb_zreset
-  if [ -n "$self" ]; then
-    ip=$(echo "$ts" | awk -v h="$self" '$0 ~ h {print $1; exit}'); : "${ip:=$(hostname -I 2>/dev/null | awk '{print $1}')}"
-    __wb_zrow "${WB_LBL}$(printf '%-11s' "${self:0:10}")${WB_FR}${WB_WHT}$(printf '%-16s' "${ip:-?}")${WB_DM}(here)"
-  fi
-  local IFS_SAVE="$IFS"
-  for peer in ${WB_PEERS:-}; do   # no peers by default — set WB_PEERS in config (never ship real IPs)
-    IFS='|' read -r nm match probe <<<"$peer"; IFS="$IFS_SAVE"
-    ip=$(echo "$ts" | awk -v m="$match" '$0 ~ m {print $1; exit}')
-    local phost="${probe%:*}" pport="${probe##*:}"
-    # only probe when host/port are safe literals — never interpolate raw config into a shell
-    if [ -n "$probe" ] && [[ "$phost" =~ ^[A-Za-z0-9._-]+$ ]] && [[ "$pport" =~ ^[0-9]+$ ]] \
-       && timeout 0.8 bash -c "exec 3<>/dev/tcp/${phost}/${pport}" 2>/dev/null; then
-      st="${WB_GRN}● serving ${WB_FR}${WB_DM}:${pport}"
-    elif echo "$ts" | grep -qi "$match.*active"; then
-      st="${WB_GRN}● online"
-    else
-      st="${WB_DM}○ offline"
-    fi
-    __wb_zrow "${WB_LBL}$(printf '%-11s' "${nm:0:10}")${WB_FR}${WB_WHT}$(printf '%-16s' "${ip:-—}")${WB_FR}${st}"
-  done
-  IFS="$IFS_SAVE"
-  local nssh sc ntmux tnames
-  nssh=$(who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)'); : "${nssh:=0}"
-  sc=$WB_WHT; [ "${nssh:-0}" -ge 4 ] 2>/dev/null && sc=$WB_YEL
-  ntmux=$(tmux ls 2>/dev/null | wc -l | tr -d ' '); : "${ntmux:=0}"
-  tnames=$(tmux ls 2>/dev/null | sed 's/:.*//' | paste -sd, - | sed 's/,/, /g')
-  __wb_zrow "${WB_LBL}$(printf '%-11s' 'ssh')${WB_FR}${sc}${nssh} remote${WB_FR} ${WB_DM}login(s) · ghosts? → ${WB_CYN}ssh-reap"
-  if [ "${ntmux:-0}" -gt 0 ]; then
-    __wb_zrow "${WB_LBL}$(printf '%-11s' 'tmux')${WB_FR}${WB_WHT}${ntmux} session(s)${WB_FR} ${WB_DM}${tnames}"
-  else
-    __wb_zrow "${WB_LBL}$(printf '%-11s' 'tmux')${WB_FR}${WB_DM}no sessions · start: ${WB_CYN}tmux new -s work"
-  fi
-}
 
 # ---- SECURITY (curated, intelligent alerts — not raw port dumps) ------------
 __wb_portname() {
@@ -450,7 +311,7 @@ __hkeys_frame_cmd() {
 }
 __hkeys_frame_head() { __wb_zrow " ${WB_HDR}${WB_B}$1${WB_FR}"; }
 __hkeys_frame_gap()  { __wb_plainrow ""; }
-__wb_hermes() {
+__wb_hermes_full() {
   __wb_hdr "HERMES"
   __wb_zreset
   __wb_zrow " ${WB_B}${WB_YEL}#${WB_FR} ${WB_WHT}= brother number${WB_DM}; use ${WB_B}${WB_YEL}1${WB_FR}${WB_DM}=master-1-codex, ${WB_B}${WB_YEL}2${WB_FR}${WB_DM}=master-2-local"
@@ -471,26 +332,8 @@ __wb_hermes() {
 }
 
 # ---- COMMANDS (cyan = copyable; tmux + operator commands) -------------------
-__wb_cmdrow() { __wb_zrow "${WB_PNK}${WB_B}$(printf '%-8s' "$1")${WB_FR} ${2}"; }
-__wb_commands() {
-  __wb_hdr "COMMANDS"
-  __wb_zreset
-  __wb_cmdrow "UPDATE" "${WB_CYN}update-all${WB_FR} ${WB_D}apt/brew/snap/node/npm/uv/pipx/gh + claude/codex"
-  __wb_cmdrow "HELP"   "${WB_CYN}clamhelp${WB_FR} ${WB_D}full reference${WB_FR}   ${WB_CYN}restart${WB_FR} ${WB_D}reload shell${WB_FR}   ${WB_CYN}ssh mac"
-  __wb_cmdrow "INSTALL" "${WB_D}codex/claude:${WB_FR} ${WB_CYN}npm i -g @openai/codex${WB_FR} ${WB_D}·${WB_FR} ${WB_CYN}@anthropic-ai/claude-code"
-  __wb_cmdrow "TMUX"   "${WB_CYN}tmux${WB_FR} ${WB_D}list${WB_FR}   ${WB_CYN}tmux 2${WB_FR} ${WB_D}join #2${WB_FR}   ${WB_CYN}tmux new -s work${WB_FR}   ${WB_D}detach ${WB_CYN}Ctrl-b d"
-  __wb_cmdrow ""       "${WB_CYN}tmux kill 1 2${WB_FR} ${WB_D}kill #1 #2${WB_FR}   ${WB_CYN}tmux rename 3 work${WB_FR} ${WB_D}rename #3"
-  __wb_cmdrow "LID"    "${WB_CYN}lid-status${WB_FR}   ${WB_CYN}lid-on-clamshell${WB_FR} ${WB_D}stay awake${WB_FR}   ${WB_CYN}lid-off-clamshell"
-  __wb_cmdrow "SSH"    "${WB_CYN}ssh-sessions${WB_FR} ${WB_D}who's on${WB_FR}   ${WB_CYN}ssh-reap${WB_FR} ${WB_D}kill ghosts (keeps this + tmux)"
-  __wb_cmdrow "SECRET" "${WB_CYN}vault${WB_FR} ${WB_D}edit${WB_FR}   ${WB_CYN}secret get NAME${WB_FR}   ${WB_CYN}secret list${WB_FR}   ${WB_D}never logged"
-}
 
 # ---- FOOTER (update notice — below the board so it never confuses hierarchy) -
-__wb_footer() {
-  printf '  %s%s%s\n' "$WB_D" "$(__wb_repeat '·' "$(( WB_FRAME_INNER + 2 ))")" "$WB_R"
-  printf '   %skeep tools fresh:%s %supdate-all%s %s· Codex%s %snpm i -g @openai/codex@latest%s %s· Claude%s %snpm i -g @anthropic-ai/claude-code@latest%s\n' \
-    "$WB_D" "$WB_R" "$WB_CYN" "$WB_R" "$WB_D" "$WB_R" "$WB_CYN" "$WB_R" "$WB_D" "$WB_R" "$WB_CYN" "$WB_R"
-}
 
 # ---- ANIMATION (showpiece; opt-in. Login stays static + instant.) -----------
 #  Banner SLAMS in from behind the right edge to its resting left position, then
@@ -559,7 +402,7 @@ clamboard() {
   printf '\n'
 }
 hkeys() { __wb_load_config; __wb_paint; WB_FRAME_ON=1; WB_W=$WB_FRAME_INNER; WB_ZW=$WB_FRAME_INNER
-  __wb_frame_top; __wb_hermes; __wb_frame_bottom; WB_FRAME_ON=0; }
+  __wb_frame_top; __wb_hermes_full; __wb_frame_bottom; WB_FRAME_ON=0; }
 keys() { hkeys; }
 clamhelp() {
   __wb_load_config; __wb_paint
@@ -593,4 +436,254 @@ clamhelp() {
 }
 
 # ---- auto-render: interactive shells, or when executed directly -------------
+
+# ===========================================================================
+#  FUSED OVERRIDE LAYER (appended before the auto-render guard).
+#  Later bash definitions WIN, so the original table-drawing engine
+#  (__wb_zrow / __wb_plainrow / frame / clip / palette) is left untouched.
+#  This layer only restores CONTENT: expanded 5-group machine + history
+#  graphs, neon name, funnier welcome, 2-above-1-below section spacing.
+# ===========================================================================
+
+# --- palette additions (set globally; __wb_paint never clears these) --------
+WB_GOLD=$'\e[1m\e[38;5;220m'          # bold gold — group sub-headers
+WB_NEON_ORANGE=$'\e[1m\e[38;5;208m'   # bold neon orange — the name, pops
+
+# --- section header: TWO blank rows above, title divider, ONE blank below ---
+__wb_hdr() {
+  local lbl="$1" rule
+  rule=$(( WB_FRAME_INNER - ${#lbl} - 3 )); ((rule < 4)) && rule=4
+  __wb_plainrow ""
+  __wb_plainrow ""
+  printf '  %s├%s─ %s%s%s %s%s┤%s\n' \
+    "$WB_AC" "$WB_D" "$WB_YEL$WB_B" "$lbl" "$WB_R$WB_D" \
+    "$(__wb_repeat '─' "$rule")" "$WB_AC" "$WB_R"
+  __wb_plainrow ""
+}
+
+# --- funnier / smarter time-aware greeting (name inserted neon by caller) ---
+__wb_greeting() {   # echoes: HELLO<TAB>TAGLINE
+  local h; h=$((10#$(date +%H 2>/dev/null || echo 12))); local -a hi msg
+  if   ((h>=5 && h<12)); then
+    hi=("Good morning" "Rise and grind" "Morning" "Up and at it" "Dawn shift")
+    msg=("the factory held all night." "all loops survived till sunrise." "fresh window, clean slate." "the night crew kept watch." "coffee's the only dependency unmet.")
+  elif ((h>=12 && h<17)); then
+    hi=("Afternoon" "Good afternoon" "Back at the helm" "Midday" "Console's warm")
+    msg=("steady state, no fires." "everything important is on deck." "tools sharpened, lane open." "the grind continues." "let's bend some metal.")
+  elif ((h>=17 && h<22)); then
+    hi=("Evening" "Good evening" "Golden hour" "Wind-down" "Dusk shift")
+    msg=("the day's still got moves left." "ship one thing before dark." "the box is yours." "quiet hum, green lights." "one more good push?")
+  else
+    hi=("Working late" "Burning the oil" "Night owl" "Witching hour" "Still here")
+    msg=("sleep is a config flag — leave it set." "the machines don't blink; you should." "low light, high focus." "the LAN never sleeps; you can." "make it count, then rack out.")
+  fi
+  printf '%s\t%s' "${hi[RANDOM % ${#hi[@]}]}" "${msg[RANDOM % ${#msg[@]}]}"
+}
+__wb_greeting_row() {
+  local name="${WB_DISPLAY_NAME:-friend}" hi msg up
+  IFS=$'\t' read -r hi msg < <(__wb_greeting)
+  up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/ weeks\?/w/;s/,//g' || echo '?')
+  __wb_plainrow ""
+  __wb_plainrow "${WB_HDR}${hi}, ${WB_NEON_ORANGE}${name}${WB_FR}${WB_HDR}.${WB_R} ${WB_WHT}${msg}${WB_R}"
+  __wb_plainrow "${WB_DM}up ${up} · $(date '+%a %d %b · %H:%M' 2>/dev/null)"
+}
+
+# --- machine helpers (history sparkline engine, ported intact) ---------------
+__wb_pct() { local p="${1:-0}"; [[ "$p" =~ ^-?[0-9]+$ ]] || p=0; ((p<0))&&p=0; ((p>100))&&p=100; printf '%s' "$p"; }
+__wb_clock_pct() { local c="${1:-0}" m="${2:-0}"; [[ "$c" =~ ^[0-9]+$ ]]||c=0; [[ "$m" =~ ^[0-9]+$ ]]||m=0; ((m>0)) && __wb_pct $((c*100/m)) || printf '0'; }
+__wb_hist_path() { printf '%s' "${WELCOME_BOARD_MACHINE_HISTORY:-$HOME/.local/state/welcome-board/machine-series.tsv}"; }
+__wb_hist_trim() { local p="$1" t; [ -f "$p" ] || return 0; t="${p}.tmp.$$"; tail -n 1024 "$p" >"$t" 2>/dev/null && mv "$t" "$p"; rm -f "$t" 2>/dev/null||true; }
+__wb_hist_add()  { local k="$1" v; v="$(__wb_pct "$2")"; local p d; p="$(__wb_hist_path)"; d=$(dirname "$p"); mkdir -p "$d" 2>/dev/null||return 0; printf '%s\t%s\t%s\n' "$(date +%s 2>/dev/null||echo 0)" "$k" "$v" >>"$p" 2>/dev/null||return 0; }
+# history sparkline (width + glyphs come from WB_SPARK_N / WB_SPARK globals)
+: "${WB_SPARK:=▁▂▃▄▅▆▇█}"; : "${WB_SPARK_N:=8}"
+__wb_hist_graph() {
+  local key="$1" value path vals count pad v idx out="" levels="${WB_SPARK}" n="${WB_SPARK_N}" fb=""
+  value="$(__wb_pct "$2")"; path="$(__wb_hist_path)"
+  __wb_hist_add "$key" "$value"; __wb_hist_trim "$path"
+  vals=$(awk -F '\t' -v k="$key" '$2==k {print $3}' "$path" 2>/dev/null | tail -n "$n")
+  count=$(printf '%s\n' "$vals" | sed '/^$/d' | wc -l | awk '{print $1}')
+  pad=$((n - count)); while ((pad>0)); do vals=$(printf '0\n%s' "$vals"); pad=$((pad-1)); done
+  while read -r v; do [ -z "$v" ] && continue; v=$(__wb_pct "$v"); idx=$((v*7/100)); out+="${levels:idx:1}"; done <<< "$vals"
+  for ((v=0;v<n;v++)); do fb+="${levels:0:1}"; done
+  printf '%s' "${out:-$fb}"
+}
+# (__wb_mrow + __wb_msub are VARIANT-specific; defined below)
+
+# --- network throughput (real /proc/net/dev delta; no mocks) -----------------
+__wb_netrate() {   # echoes: iface rxKBs txKBs  (sum non-loopback over a 0.1s delta)
+  local r1 t1 r2 t2 nif
+  read -r r1 t1 < <(awk 'NR>2{gsub(":"," "); if($1!="lo"){rx+=$2;tx+=$10}} END{print rx+0,tx+0}' /proc/net/dev 2>/dev/null)
+  sleep 0.1 2>/dev/null
+  read -r r2 t2 < <(awk 'NR>2{gsub(":"," "); if($1!="lo"){rx+=$2;tx+=$10}} END{print rx+0,tx+0}' /proc/net/dev 2>/dev/null)
+  nif=$(ip route 2>/dev/null | awk '/^default/{print $5; exit}'); : "${nif:=net}"
+  awk -v a="${r1:-0}" -v b="${r2:-0}" -v c="${t1:-0}" -v d="${t2:-0}" -v i="$nif" \
+    'BEGIN{printf "%s %.0f %.0f", i, (b-a)/0.1/1024, (d-c)/0.1/1024}'
+}
+
+# --- load row routes through __wb_mrow so it matches each variant's style ----
+__wb_loadrow() {
+  local pct="$1" l1="$2" l5="$3" l15="$4" up="$5" graph="$6"
+  __wb_mrow "LOAD" "$pct" "$graph" "${WB_WHT}${l1} ${WB_DM}· ${WB_WHT}${l5} ${WB_DM}· ${WB_WHT}${l15}${WB_DM}  (1m·5m·15m) · up ${up}"
+}
+
+# --- MACHINE: five segregated groups, real probes, history graphs -----------
+__wb_machine() {
+  [ "$(__wb_os)" = macos ] && { __wb_machine_macos; return; }
+  __wb_hdr "MACHINE"; __wb_zreset
+  # CPU
+  local cbrand cores ctemp cfcur cfmax cbusy
+  cbrand=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | sed -E 's/.*: //; s/\(R\)//g; s/\(TM\)//g; s/Intel //; s/Core //; s/ CPU.*//; s/  */ /g; s/^ //'); : "${cbrand:=CPU}"
+  cores=$(nproc 2>/dev/null || echo '?')
+  ctemp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1); [ -n "$ctemp" ] && ctemp=$((ctemp/1000))
+  cfcur=$(awk '{s+=$1;n++} END{if(n)printf "%.2f",s/n/1e6}' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null)
+  cfmax=$(awk '{printf "%.2f",$1/1e6}' /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)
+  cbusy=$(__wb_cpubusy)
+  # RAM / SWAP
+  local mu mtot rpct su stot spct ruGB rtGB suGB stGB
+  read -r mu mtot < <(free -m 2>/dev/null | awk '/^Mem:/{print $3,$2}')
+  [ -n "$mtot" ] && [ "$mtot" -gt 0 ] 2>/dev/null && rpct=$(( ${mu:-0}*100/mtot )) || rpct=0
+  read -r su stot < <(free -m 2>/dev/null | awk '/^Swap:/{print $3,$2}')
+  [ -n "$stot" ] && [ "$stot" -gt 0 ] 2>/dev/null && spct=$(( ${su:-0}*100/stot )) || spct=0
+  ruGB=$(awk -v u="${mu:-0}" 'BEGIN{printf "%.1f",u/1024}'); rtGB=$(awk -v t="${mtot:-0}" 'BEGIN{printf "%.0f",t/1024}')
+  suGB=$(awk -v u="${su:-0}" 'BEGIN{printf "%.1f",u/1024}'); stGB=$(awk -v t="${stot:-0}" 'BEGIN{printf "%.0f",t/1024}')
+  # GPU
+  local gpu gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw vpct gclk_pct mclk_pct v
+  gpu=$(nvidia-smi --query-gpu=name,pstate,utilization.gpu,temperature.gpu,memory.used,memory.total,clocks.gr,clocks.max.gr,clocks.mem,clocks.max.mem,power.draw --format=csv,noheader,nounits 2>/dev/null | head -1)
+  IFS=',' read -r gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw <<<"$gpu"
+  gname=$(printf '%s' "$gname" | sed -E 's/^ *//; s/NVIDIA //; s/GeForce //'); : "${gname:=no GPU}"
+  for v in gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw; do printf -v "$v" '%s' "${!v// /}"; done
+  [ -n "$vt" ] && [ "$vt" -gt 0 ] 2>/dev/null && vpct=$(( ${vu:-0}*100/vt )) || vpct=0
+  gpw=${gpw%.*}; gclk_pct=$(__wb_clock_pct "$cgr" "$cgrmax"); mclk_pct=$(__wb_clock_pct "$cm" "$cmmax")
+  # DISK
+  local du dt dp
+  read -r du dt dp < <(df -BG --output=used,size,pcent / 2>/dev/null | tail -1 | tr -d 'G%')
+  # LOAD
+  local l1 l5 l15 lpct up
+  read -r l1 l5 l15 _ < /proc/loadavg 2>/dev/null
+  lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{p=x/n*100;p=(p>100)?100:p;printf "%d",p}')
+  up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/ weeks\?/w/;s/,//g')
+
+  __wb_msub "CPU"
+  __wb_mrow  "USAGE" "${cbusy:-0}"             "$(__wb_hist_graph cpu "${cbusy:-0}")"   "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}${cfcur:-?}${WB_DM}/${cfmax:-?} GHz"
+  __wb_mrow  "TEMP"  "$(__wb_pct "${ctemp:-0}")" "$(__wb_hist_graph ctemp "${ctemp:-0}")" "${WB_DEV}package${WB_DM} · ${WB_FR}$(__wb_tcol "$ctemp")${ctemp:-?}°C"
+  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
+  __wb_plainrow ""
+  __wb_msub "RAM"
+  __wb_mrow  "USED"  "${rpct}" "$(__wb_hist_graph ram "${rpct:-0}")"  "$(__wb_grad "$rpct")${ruGB}${WB_DM}/${rtGB} GB"
+  __wb_mrow  "SWAP"  "${spct}" "$(__wb_hist_graph swap "${spct:-0}")" "$(__wb_grad "$spct")${suGB}${WB_DM}/${stGB} GB"
+  __wb_plainrow ""
+  __wb_msub "GPU"
+  __wb_mrow  "USAGE" "${gutil:-0}"             "$(__wb_hist_graph gpu "${gutil:-0}")"   "${WB_DEV}${gname}  ${WB_DM}${gp:-?} · ${WB_WHT}${gpw:-?}${WB_DM} W"
+  __wb_mrow  "TEMP"  "$(__wb_pct "${gtemp:-0}")" "$(__wb_hist_graph gtemp "${gtemp:-0}")" "${WB_DEV}core${WB_DM} · ${WB_FR}$(__wb_tcol "$gtemp")${gtemp:-?}°C"
+  __wb_mrow  "VRAM"  "${vpct}" "$(__wb_hist_graph vram "${vpct:-0}")"  "$(__wb_grad "$vpct")${vu:-?}${WB_DM}/${vt:-?} MB"
+  __wb_mrow  "CLOCK" "$gclk_pct" "$(__wb_hist_graph gclk "$gclk_pct")" "${WB_DEV}graphics${WB_DM} · ${WB_WHT}${cgr:-?}${WB_DM}/${cgrmax:-?} MHz"
+  __wb_plainrow ""
+  __wb_msub "DISK"
+  __wb_mrow  "ROOT"  "${dp:-0}" "$(__wb_hist_graph disk "${dp:-0}")"  "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · /"
+}
+
+__wb_machine_macos() {
+  __wb_hdr "MACHINE"; __wb_zreset
+  local cbrand cores mtot_b ctot psize mu_pages mu rpct btot bused dt du dp l1 l5 l15 lpct up
+  cbrand=$(sysctl -n machdep.cpu.brand_string 2>/dev/null | sed -E 's/ +\(.*\)$//; s/  */ /g'); : "${cbrand:=Apple Silicon}"
+  cores=$(sysctl -n hw.logicalcpu 2>/dev/null || echo '?')
+  mtot_b=$(sysctl -n hw.memsize 2>/dev/null); ctot=$(( ${mtot_b:-0}/1073741824 ))
+  psize=$(vm_stat 2>/dev/null | awk -F'of ' '/page size/{gsub(/[^0-9]/,"",$2);print $2;exit}'); : "${psize:=4096}"
+  mu_pages=$(vm_stat 2>/dev/null | awk '/Pages active/{a=$3}/Pages wired/{w=$4}/occupied by compressor/{c=$5} END{gsub(/\./,"",a);gsub(/\./,"",w);gsub(/\./,"",c);print (a+w+c)+0}')
+  mu=$(( ${mu_pages:-0} * ${psize:-4096} / 1073741824 ))
+  [ "${ctot:-0}" -gt 0 ] && rpct=$(( mu*100/ctot )) || rpct=0
+  read -r btot bused < <(df / 2>/dev/null | awk 'NR==2{print $2,$3}')
+  dt=$(( ${btot:-0}*512/1000000000 )); du=$(( ${bused:-0}*512/1000000000 ))
+  [ "${btot:-0}" -gt 0 ] && dp=$(( bused*100/btot )) || dp=0
+  read -r l1 l5 l15 < <(sysctl -n vm.loadavg 2>/dev/null | tr -d '{}' | awk '{print $1,$2,$3}')
+  lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{n=(n+0<1)?1:n;p=(x+0)/n*100;p=(p>100)?100:p;printf "%d",p}')
+  up=$(uptime 2>/dev/null | sed -E 's/.*up *//; s/,? *[0-9]+ users?.*//; s/,? *load aver.*//; s/  */ /g; s/^ //; s/, *$//')
+  __wb_msub "CPU"
+  __wb_mrow "USAGE" "${lpct:-0}" "$(__wb_hist_graph cpu "${lpct:-0}")" "${WB_DEV}${cbrand}  ${WB_DM}${cores}t · ${WB_WHT}macOS"
+  __wb_loadrow "${lpct:-0}" "${l1:-?}" "${l5:-?}" "${l15:-?}" "${up:-?}" "$(__wb_hist_graph load "${lpct:-0}")"
+  __wb_msub "RAM"
+  __wb_mrow "USED" "${rpct}" "$(__wb_hist_graph ram "${rpct:-0}")" "$(__wb_grad "$rpct")${mu:-?}${WB_DM}/${ctot:-?} GB"
+  __wb_msub "GPU"
+  __wb_mrow "USAGE" "0" "$(__wb_hist_graph gpu 0)" "${WB_DEV}Apple/Metal${WB_DM} · stats not exposed"
+  __wb_msub "DISK"
+  __wb_mrow "ROOT" "${dp:-0}" "$(__wb_hist_graph disk "${dp:-0}")" "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · /"
+}
+
+# ===========================================================================
+#  POLISH OVERRIDES — holistic cleanup of the whole list.
+#  Consolidate networking into ONE section, tighten HERMES, dedupe COMMANDS,
+#  kill the redundant footer. (Table-drawing engine still untouched.)
+# ===========================================================================
+
+# --- NETWORK: throughput graph (real /proc/net/dev) + connectivity, one home -
+__wb_network() {
+  __wb_hdr "NETWORK"; __wb_zreset
+  local nif nrx ntx npct
+  read -r nif nrx ntx < <(__wb_netrate)
+  npct=$(awk -v r="${nrx:-0}" -v t="${ntx:-0}" 'BEGIN{m=(r>t)?r:t;p=m/12500*100;p=(p>100)?100:p;printf "%d",p}')
+  __wb_mrow "RATE" "${npct}" "$(__wb_hist_graph net "${npct}")" "${WB_DEV}${nif:-—}  ${WB_DM}down ${WB_WHT}${nrx:-0}${WB_DM} · up ${WB_WHT}${ntx:-0}${WB_DM} KB/s"
+  local ts self peer nm match probe ip st
+  ts=$(timeout 1 tailscale status 2>/dev/null)
+  self=$(hostname 2>/dev/null | cut -d. -f1)
+  if [ -n "$self" ]; then
+    ip=$(echo "$ts" | awk -v h="$self" '$0 ~ h {print $1; exit}'); : "${ip:=$(hostname -I 2>/dev/null | awk '{print $1}')}"
+    __wb_zrow "${WB_LBL}$(printf '%-6s' "${self:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "${ip:-?}")${WB_DM}· this machine"
+  fi
+  local IFS_SAVE="$IFS"
+  for peer in ${WB_PEERS:-}; do
+    IFS='|' read -r nm match probe <<<"$peer"; IFS="$IFS_SAVE"
+    ip=$(echo "$ts" | awk -v m="$match" '$0 ~ m {print $1; exit}')
+    local phost="${probe%:*}" pport="${probe##*:}"
+    if [ -n "$probe" ] && [[ "$phost" =~ ^[A-Za-z0-9._-]+$ ]] && [[ "$pport" =~ ^[0-9]+$ ]] \
+       && timeout 0.8 bash -c "exec 3<>/dev/tcp/${phost}/${pport}" 2>/dev/null; then
+      st="${WB_GRN}● serving ${WB_DM}:${pport}"
+    elif echo "$ts" | grep -qi "$match.*active"; then st="${WB_GRN}● online"
+    else st="${WB_DM}○ offline"; fi
+    __wb_zrow "${WB_LBL}$(printf '%-6s' "${nm:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "${ip:-—}")${WB_FR}${st}"
+  done
+  IFS="$IFS_SAVE"
+  local nssh sc ntmux tnames
+  nssh=$(who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)'); : "${nssh:=0}"
+  sc=$WB_WHT; [ "${nssh:-0}" -ge 4 ] 2>/dev/null && sc=$WB_YEL
+  ntmux=$(tmux ls 2>/dev/null | wc -l | tr -d ' '); : "${ntmux:=0}"
+  tnames=$(tmux ls 2>/dev/null | sed 's/:.*//' | paste -sd, - | sed 's/,/, /g')
+  __wb_zrow "${WB_LBL}$(printf '%-6s' 'ssh')${WB_FR} ${sc}${nssh}${WB_FR} ${WB_DM}remote login(s) · clear ghosts → ${WB_CYN}ssh-reap"
+  if [ "${ntmux:-0}" -gt 0 ]; then
+    __wb_zrow "${WB_LBL}$(printf '%-6s' 'tmux')${WB_FR} ${WB_WHT}${ntmux}${WB_FR} ${WB_DM}session(s): ${tnames}"
+  else
+    __wb_zrow "${WB_LBL}$(printf '%-6s' 'tmux')${WB_FR} ${WB_DM}no sessions · start: ${WB_CYN}tmux new -s work"
+  fi
+}
+
+# --- HERMES: consolidated to 4 tight rows (full sheet still behind `hkeys`) --
+__wb_hermes() {
+  __wb_hdr "HERMES"; __wb_zreset
+  __wb_zrow "${WB_DM}two brothers — ${WB_B}${WB_YEL}1${WB_FR}${WB_DM}=codex, ${WB_B}${WB_YEL}2${WB_FR}${WB_DM}=local. ${WB_DM}type ${WB_CYN}m1c${WB_FR}${WB_DM}/${WB_CYN}m2s${WB_FR}${WB_DM} (the ${WB_B}${WB_YEL}#${WB_FR}${WB_DM} is the brother)"
+  __wb_zrow "${WB_CYN}m#c${WB_FR} ${WB_WHT}chat${WB_DM}   ${WB_CYN}m#s${WB_FR} ${WB_WHT}status${WB_DM}   ${WB_CYN}m#g${WB_FR} ${WB_WHT}gateway${WB_DM}   ${WB_CYN}m#d${WB_FR} ${WB_WHT}dashboard${WB_DM}   ${WB_CYN}m#k${WB_FR} ${WB_WHT}kanban"
+  __wb_zrow "${WB_CYN}m#up${WB_FR}${WB_DM}/${WB_CYN}down${WB_FR}${WB_DM}/${WB_CYN}re${WB_FR} ${WB_WHT}gateway on·off·restart${WB_DM}   ${WB_CYN}m#doctor${WB_FR} ${WB_WHT}diagnose${WB_DM}   ${WB_CYN}m#setup${WB_FR} ${WB_WHT}wizard"
+  __wb_zrow "${WB_DM}full cheat-sheet any time: ${WB_CYN}hkeys"
+}
+
+# --- COMMANDS: deduped + curated to what you actually reach for -------------
+__wb_cmdrow() { __wb_zrow "${WB_PNK}${WB_B}$(printf '%-9s' "$1")${WB_FR} ${2}"; }
+__wb_commands() {
+  __wb_hdr "COMMANDS"; __wb_zreset
+  __wb_cmdrow "update"  "${WB_CYN}update-all${WB_FR} ${WB_D}apt·snap·node·npm·uv·gh + claude + codex${WB_FR}   ${WB_CYN}restart${WB_FR} ${WB_D}reload shell"
+  __wb_cmdrow "board"   "${WB_CYN}clamboard${WB_FR} ${WB_D}reprint this${WB_FR}   ${WB_CYN}clamhelp${WB_FR} ${WB_D}every command${WB_FR}   ${WB_CYN}hkeys${WB_FR} ${WB_D}hermes keys"
+  __wb_cmdrow "tmux"    "${WB_CYN}tmux${WB_FR} ${WB_D}list${WB_FR}  ${WB_CYN}tmux 2${WB_FR} ${WB_D}join${WB_FR}  ${WB_CYN}tmux new -s work${WB_FR}  ${WB_CYN}kill 1 2${WB_FR}  ${WB_D}detach ${WB_CYN}C-b d"
+  __wb_cmdrow "remote"  "${WB_CYN}ssh mac${WB_FR}  ${WB_CYN}ssh xtreme${WB_FR}  ${WB_CYN}ssh-reap${WB_FR} ${WB_D}kill ghosts${WB_FR}  ${WB_CYN}lid-on${WB_FR}${WB_D}/${WB_CYN}lid-off-clamshell"
+  __wb_cmdrow "secrets" "${WB_CYN}vault${WB_FR} ${WB_D}edit${WB_FR}  ${WB_CYN}secret get NAME${WB_FR}  ${WB_CYN}secret list${WB_FR}   ${WB_D}values never printed"
+}
+
+# --- FOOTER: killed (it only duplicated COMMANDS) ---------------------------
+__wb_footer() { :; }
+
+# --- VARIANT A: classic gauge + 8-cell history spark, inline gold sub-headers
+WB_SPARK="▁▂▃▄▅▆▇█"; WB_SPARK_N=8
+__wb_mrow() {
+  local g="${3:-▁▁▁▁▁▁▁▁}"
+  __wb_zrow "${WB_LBL}$(printf '%-6s' "$1")${WB_FR} $(__wb_bar "$2") ${WB_B}${WB_WHT}$(printf '%3s' "${2:-0}")%${WB_FR} ${WB_CYN}${g}${WB_FR}  $4"
+}
+__wb_msub() { __wb_plainrow "${WB_GOLD}$(printf '%-5s' "$1")${WB_FR}"; }
+
 if [[ $- == *i* ]] || [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then __wb_render 0; fi

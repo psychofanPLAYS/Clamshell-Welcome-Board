@@ -96,7 +96,7 @@ class MachineSectionTests(unittest.TestCase):
         self.assertIn("5m", legend_line)
 
     def test_machine_rows_have_gauge_bars_and_correct_rows(self) -> None:
-        """Linux MACHINE section: CPU/GPU/VRAM/RAM/SWAP/DISK/LOAD each have an 8-cell bar."""
+        """Linux MACHINE: segregated CPU/RAM/GPU/DISK groups; each metric row has an 8-cell bar."""
         with tempfile.TemporaryDirectory() as raw_tmp:
             home = Path(raw_tmp)
             bin_dir = home / "bin"
@@ -105,36 +105,36 @@ class MachineSectionTests(unittest.TestCase):
 
             rendered = render_machine_section(home)
 
-        # All expected gauge rows present
-        for label in ("CPU", "GPU", "VRAM", "RAM", "SWAP", "DISK", "LOAD"):
-            self.assertIn(label, rendered)
+        # The four segregated group sub-headers must all appear.
+        for group in ("CPU", "RAM", "GPU", "DISK"):
+            self.assertIn(group, rendered)
 
-        # Load legend row present
+        # Inline load legend present (no separate misaligned legend line anymore).
         self.assertIn("1m", rendered)
         self.assertIn("15m", rendered)
 
-        # Each gauge row has an 8-cell █░ bar and a percent
+        # Each metric row carries an 8-cell █░ gauge bar followed by a percent.
         import re as _re
         bar_re = _re.compile(r"[█░]{8}\s+\d+%")
-        for label in ("CPU", "GPU", "VRAM", "RAM", "SWAP", "DISK", "LOAD"):
-            # Rows look like:  │ LABEL  ████░░░░  NN%  ...
+        for label in ("USAGE", "TEMP", "LOAD", "USED", "SWAP", "VRAM", "CLOCK", "ROOT"):
+            # Rows look like:  │ LABEL  ████░░░░  NN%  <spark>  detail
             label_line = next(
                 (l for l in rendered.splitlines() if re.search(r"│ " + label + r"\b", l)),
                 None,
             )
-            self.assertIsNotNone(label_line, f"Row for {label} not found")
+            self.assertIsNotNone(label_line, f"Metric row for {label} not found")
             self.assertRegex(
                 label_line,
                 bar_re,
                 f"{label} row should contain an 8-cell bar and percent",
             )
 
-        # Old subheaders from previous design must NOT appear
+        # Old subheaders / merged group from previous designs must NOT appear.
         self.assertNotIn("MEMORY / DISK", rendered)
         self.assertNotIn("PRESSURE", rendered)
         self.assertNotIn("CLOCKS", rendered)
 
-        # All framed rows are 82 display columns
+        # All framed rows are 82 display columns.
         framed_rows = [line for line in rendered.splitlines() if line.startswith("  │")]
         self.assertTrue(framed_rows)
         self.assertEqual({len(line) for line in framed_rows}, {82})
