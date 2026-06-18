@@ -1,57 +1,61 @@
-WORKSTATION
 
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Hello, ALEX. clean signal, no drama.                                         │
-│ up 3h 12m · Thu 18 Jun · 13:24                                              │
-╞══ MACHINE ═══════════════════════════════════════════════════════════════════╡
-│                      CPU                                                     │
-│ TEMP   ███░░░░░  45% ▁▁▁▁▁▄▄▄  CPU · 45°C                                   │
-│ USAGE  ██░░░░░░  32% ▁▁▁▁▁▂▂▃  Generic CPU  8t · 2.70/3.50 GHz              │
-│ LOAD   █░░░░░░░  14% ▁▁▁▁▁▁▂▂   1.10  0.80  0.65 · up 3h 12m                │
-│                                 1m    5m    15m                              │
-│                      GPU                                                     │
-│ TEMP   ███░░░░░  38% ▁▁▁▁▁▃▃▃  GPU · 38°C                                   │
-│ USAGE  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  Generic GPU  P8 · 4 W                        │
-│ VRAM   ███████░  98% ▁▁▁▁▁▇▇▇  6059/6144 MB                                 │
-│                      MEMORY / DISK                                           │
-│ RAM    ████░░░░  55% ▁▁▁▁▁▄▄▄  8.6/16 GB                                    │
-│ SWAP   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  0.0/8 GB                                     │
-│ DISK   ██░░░░░░  20% ▁▁▁▁▁▂▂▂  80/400 GB · root fs                          │
-╞══ SERVICES ══════════════════════════════════════════════════════════════════╡
-│ ssh       up :22 · SSH                                                       │
-│ dashboard up :6900 · shim dash                                               │
-│ embedder  up :6901 · embedder                                                │
-│ reranker  up :6902 · reranker                                                │
-╞══ YOU ARE ON ════════════════════════════════════════════════════════════════╡
-│ host      workstation Linux · x86_64                                         │
-│ ip        local/tailnet address                                              │
-│ summary   1 terminal session(s) · 2 tmux session(s)                          │
-│ session   Alex@pts/1           idle 00:05 · from local                       │
-╞══ SECURITY ══════════════════════════════════════════════════════════════════╡
-│ LAN/ALL   1 exposed SSH:22(sshd)                                             │
-│ VPN       1 tailnet listener · dashboard:6900(python)                        │
-│ loopback  3 local-only listeners                                             │
-│ new open  unknown run wb ports snapshot after review                         │
-│ inspect   wb ports scan raw · wb ports explain advice · wb ports plan dry-run│
-╞══ HEALTH ════════════════════════════════════════════════════════════════════╡
-│ security  baseline unset review then run wb ports snapshot                   │
-│ exposure  1 LAN/ALL · 3 loopback                                             │
-╞══ HERMES ════════════════════════════════════════════════════════════════════╡
-│ profile   master-1-codex · Hermes Agent                                      │
-│ master-1  m1/m1c/m1s/m1g chat status gateway · m1up/m1down/m1re             │
-│ master-2  m2/m2c/m2s/m2g local worker · m2up/m2down/m2re                    │
-╞══ TMUX ══════════════════════════════════════════════════════════════════════╡
-│ work                             3 windows · attached                        │
-│ notes                            1 window · detached                         │
-│ jump                             tmux 3 or tmux3 · join numbered session     │
-│ manage                           tmux kill 1 2 · tmux rename 3 work          │
-│ leave                            Ctrl-b d detach · exit close pane           │
-╞══ COMMANDS ══════════════════════════════════════════════════════════════════╡
-│ BOARD    restart reload shell/board   wb render preview                      │
-│ SETUP    wb setup personalize   wb theme   wb sections                       │
-│ PORTS    wb ports explain advice   wb ports snapshot save baseline           │
-│ TMUX     tmux ls   tmux new work   tmux 3   tmux kill 1 2                    │
-╞══ NOTES ═════════════════════════════════════════════════════════════════════╡
-│ security  default-deny firewall belongs in a reviewed plan, not shell startup│
-│ ports     review expected listeners, then wb ports snapshot                  │
-└──────────────────────────────────────────────────────────────────────────────┘
+     ██████╗██╗      █████╗ ███╗   ███╗███████╗██╗  ██╗███████╗██╗     ██╗
+    ██╔════╝██║     ██╔══██╗████╗ ████║██╔════╝██║  ██║██╔════╝██║     ██║
+    ██║     ██║     ███████║██╔████╔██║███████╗███████║█████╗  ██║     ██║
+    ██║     ██║     ██╔══██║██║╚██╔╝██║╚════██║██╔══██║██╔══╝  ██║     ██║
+    ╚██████╗███████╗██║  ██║██║ ╚═╝ ██║███████║██║  ██║███████╗███████╗███████╗
+     ╚═════╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
+  01100011 01101100 01100001 01101101 01110011 01101000 01100101 01101100 01101100
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │                                                                              │
+  │ Still here, Alex. · up 2d 13h 35m · Thu 18 Jun · 04:14                       │
+  ├─ MACHINE ────────────────────────────────────────────────────────────────────┤
+  │ CPU  ░░░░░░░░  10%   i7-6700HQ  8t · 2.70/3.50 GHz · 61°C                    │
+  │ GPU  ████████ 100%   GTX 1060  P0 · 1835/1911 MHz · 71°C · 71 W              │
+  │ VRAM ███████░  98%   6059/6144 MB · mem clk 4006/4004 MHz                    │
+  │ RAM  ████░░░░  60%   9.4/16 GB                                               │
+  │ SWAP ██░░░░░░  33%   4.0/12 GB                                               │
+  │ DISK █░░░░░░░  18%   77/468 GB · root fs                                     │
+  │ LOAD █░░░░░░░  23%    1.88  1.89  1.91 · up 2d 13h 35m                       │
+  │                     ( 1m ) · ( 5m ) · ( 15m )                                │
+  ├─ NETWORK ────────────────────────────────────────────────────────────────────┤
+  │ workstatio 10.0.0.10       (here)                                            │
+  │ laptop     10.0.0.15       ● online                                          │
+  │ server     10.0.0.20       ● online                                          │
+  │ ssh       1 remote login(s) · ghosts? → ssh-reap                             │
+  │ tmux      2 session(s) work, build                                           │
+  ├─ SECURITY ───────────────────────────────────────────────────────────────────┤
+  │ ✓ Locked. LAN doors ok: SSH                                                  │
+  │ rest is loopback (this PC) or Tailscale VPN only — no strangers.             │
+  │ baseline: none yet · set: wb ports snapshot                                  │
+  ├─ SERVICES ───────────────────────────────────────────────────────────────────┤
+  │ ✓ All 5 up.                                                                  │
+  │ ssh · webdash · embedder · reranker · vector-db                              │
+  ├─ AUTOMATION ─────────────────────────────────────────────────────────────────┤
+  │ jobs     0 loops · 3 cron — backups · sync · indexer                         │
+  ├─ HERMES ─────────────────────────────────────────────────────────────────────┤
+  │  # = brother number; use 1=master-1-codex, 2=master-2-local                  │
+  │  typed for real: m1c or m2c; base works too: m1 status                       │
+  │                                                                              │
+  │  EVERYDAY                                                                    │
+  │    m#c          chat with the brother                                        │
+  │    m#s          status                                                       │
+  │    m#g          gateway  (add: start / stop / restart / status)              │
+  │    m#d          dashboard                                                    │
+  │    m#k          kanban  (shared task board)                                  │
+  │                                                                              │
+  │  TURN ON / OFF · FIX-IT                                                      │
+  │    m#up         gateway start   (m#down stop · m#re restart)                 │
+  │    m#doctor     check config + dependencies  (try this first)                │
+  │    m#setup      interactive setup wizard                                     │
+  │  reprint this section any time: hkeys (or keys)                              │
+  ├─ COMMANDS ───────────────────────────────────────────────────────────────────┤
+  │ BOARD    clamboard reprint   clamboard --animate slam-in   clamhelp full ref │
+  │ TMUX     new: tmux new -s work   join: tmux attach -t work   detach: Ctrl-b d│
+  │          list: tmux ls   kill: tmux kill-session -t work                     │
+  │ UPDATE   update-all apt/brew/snap/node/npm/uv/pipx/gh + claude/codex         │
+  │ SSH      ssh-sessions who's on   ssh-reap kill ghosts (keeps this + tmux)    │
+  │ SECRET   secret get NAME   secret list   (never printed to logs)             │
+  └──────────────────────────────────────────────────────────────────────────────┘
+  ················································································
+   keep tools fresh: update-all · Codex npm i -g @openai/codex@latest · Claude npm i -g @anthropic-ai/claude-code@latest

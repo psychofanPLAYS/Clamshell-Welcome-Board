@@ -75,7 +75,7 @@ Optional integrations belong in config:
 ```bash
 WB_HERMES_LABEL="Hermes local helper"
 WB_OPENCLAW_PATH="$HOME/_openCLAW/_OPENCLAW-HOME"
-WB_SERVICE_PORTS="dashboard:6900 app:3000"
+WB_SERVICE_PORTS="webdash:6900 app:3000"
 ```
 
 The installer or AI assistant should ask before adding these. Do not assume every

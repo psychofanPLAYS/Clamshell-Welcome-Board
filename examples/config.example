@@ -1,10 +1,37 @@
+# Welcome Board configuration — copy to ~/.config/welcome-board/config and edit.
+# Every value is optional; sane defaults apply when a key is omitted.
+# Only the keys below are read by welcome-board.sh (anything else is ignored).
+
+# Your first name, shown in the time-aware greeting ("Good evening, Alex.").
 WB_DISPLAY_NAME="Alex"
+
+# Big banner word at the top. Rendered live from the built-in block font.
 WB_BANNER_TEXT="WORKSTATION"
+
+# Visual theme. The shipped board is tuned for dark terminals.
 WB_THEME="cyan-dark"
-WB_SECTIONS="machine services identity security health hermes tmux commands custom notes"
-WELCOME_BOARD_MACHINE_HISTORY="$HOME/.local/state/welcome-board/machine-series.tsv"
+
+# Outer frame width in columns (78 fits an 80-col terminal cleanly).
+WB_FRAME_INNER="78"
+
+# Services to show in SERVICES, as name:port pairs. A service is "up" when
+# something is listening on its port. Names are shown verbatim — keep them short.
+WB_SERVICE_PORTS="ssh:22 webdash:6900 embedder:6901 reranker:6902 cockpit:36900"
+
+# NETWORK peers to probe, space-separated entries of  label|tailscale-match|probe-ip:port
+#   - label         : shown in the row
+#   - tailscale-match: substring matched against `tailscale status` to read the IP/online state
+#   - probe-ip:port  : optional TCP probe; if it connects the peer shows "serving :port"
+# Leave the probe empty (trailing |) to only report tailscale online/offline.
+WB_PEERS="laptop|laptop| server|server|10.0.0.20:6911"
+
+# SECURITY baseline: saved set of reviewed LAN listeners. SECURITY warns when the
+# live set drifts from this file. Create/update it with:  wb ports snapshot
 WB_PORT_BASELINE_FILE="$HOME/.local/state/welcome-board/ports-baseline.txt"
-WB_SERVICE_PORTS="ssh:22 dashboard:6900 embedder:6901 reranker:6902"
-WB_CUSTOM_COMMANDS_FILE="$HOME/.config/welcome-board/custom-commands"
-WB_HERMES_LABEL="Hermes local helper"
-WB_OPENCLAW_PATH="$HOME/OpenClaw"
+
+# AUTOMATION: space-separated substrings that mark a user systemd timer / cron job
+# as "ours" to surface (system timers are already excluded — this is just a filter).
+WB_AUTOMATION_MATCH="oppy superbrain kenny darkfactory trading codex claude hermes ingest"
+
+# Optional label for the HERMES section header context (free text).
+WB_HERMES_LABEL="Hermes Agent · master-1-codex / master-2-local"

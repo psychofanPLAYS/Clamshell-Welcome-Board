@@ -233,7 +233,7 @@ wb_ports_short_name() {
     6379) printf 'Redis' ;;
     5353) printf 'mDNS' ;;
     6333) printf 'vector DB' ;;
-    6900) printf 'shim dash' ;;
+    6900) printf 'webdash' ;;
     6901) printf 'embedder' ;;
     6902) printf 'reranker' ;;
     6903) printf 'Honcho' ;;

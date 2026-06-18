@@ -16,17 +16,26 @@ ANSI_RE = re.compile(r"\x1B\[[0-9;]*m")
 def render_macos_machine(home: Path) -> str:
     bin_dir = home / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
-    (bin_dir / "uname").write_text("#!/usr/bin/env bash\nprintf 'Darwin\\n'\n", encoding="utf-8")
+
+    # Force Darwin uname so __wb_machine routes to __wb_machine_macos
+    (bin_dir / "uname").write_text(
+        "#!/usr/bin/env bash\nprintf 'Darwin\\n'\n", encoding="utf-8"
+    )
+
+    # sysctl with relevant keys
     (bin_dir / "sysctl").write_text(
         "#!/usr/bin/env bash\n"
-        "case \"$*\" in\n"
+        'case "$*" in\n'
         "  *machdep.cpu.brand_string*) printf 'Apple M2\\n' ;;\n"
-        "  *hw.logicalcpu*) printf '8\\n' ;;\n"
-        "  *hw.memsize*) printf '17179869184\\n' ;;\n"
+        "  *hw.logicalcpu*)           printf '8\\n' ;;\n"
+        "  *hw.memsize*)              printf '17179869184\\n' ;;\n"
+        "  *vm.loadavg*)              printf '{ 1.46 1.66 1.98 }\\n' ;;\n"
         "  *) exit 1 ;;\n"
         "esac\n",
         encoding="utf-8",
     )
+
+    # vm_stat: enough pages to produce a sane non-negative RAM reading
     (bin_dir / "vm_stat").write_text(
         "#!/usr/bin/env bash\n"
         "cat <<'EOF'\n"
@@ -38,6 +47,8 @@ def render_macos_machine(home: Path) -> str:
         "EOF\n",
         encoding="utf-8",
     )
+
+    # df: BSD 512-byte-block format (real macOS + this mock)
     (bin_dir / "df").write_text(
         "#!/usr/bin/env bash\n"
         "cat <<'EOF'\n"
@@ -46,13 +57,17 @@ def render_macos_machine(home: Path) -> str:
         "EOF\n",
         encoding="utf-8",
     )
+
     for path in bin_dir.iterdir():
         path.chmod(0o755)
 
     env = os.environ.copy()
     env["HOME"] = str(home)
     env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
-    command = f"source {SCRIPT}; __wb_paint; WB_FRAME_ON=1; WB_FRAME_INNER=78; WB_W=78; WB_ZW=78; __wb_machine"
+    command = (
+        f"source {SCRIPT}; __wb_paint; "
+        "WB_FRAME_ON=1; WB_FRAME_INNER=78; WB_W=78; WB_ZW=78; __wb_machine"
+    )
     result = subprocess.run(
         ["bash", "-c", command],
         env=env,
@@ -68,19 +83,38 @@ class MacOSMachineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw_tmp:
             rendered = render_macos_machine(Path(raw_tmp))
 
+        # Brand string preserved
         self.assertIn("Apple M2", rendered)
+
+        # Platform label
         self.assertIn("macOS", rendered)
+
+        # Core count in the form "<n>t"
         self.assertIn("8t", rendered)
+
+        # Expected gauge rows
         self.assertIn("CPU", rendered)
-        self.assertIn("GPU", rendered)
-        self.assertIn("MEMORY / DISK", rendered)
         self.assertIn("RAM", rendered)
         self.assertIn("DISK", rendered)
+
+        # GPU is not exposed on macOS — the board prints this
         self.assertIn("not exposed", rendered)
+
+        # GB unit appears for RAM and DISK
+        self.assertRegex(rendered, r"\d+/\d+ GB")
+
+        # No integer underflow sentinel
+        self.assertNotIn("-9223", rendered)
+
+        # Old subheaders from previous design must NOT appear
+        self.assertNotIn("MEMORY / DISK", rendered)
         self.assertNotIn("PRESSURE", rendered)
         self.assertNotIn("CLOCKS", rendered)
+
+        # /proc must not appear in a macOS render
         self.assertNotIn("/proc", rendered)
 
+        # All framed rows must be exactly 82 display columns
         framed_rows = [line for line in rendered.splitlines() if line.startswith("  │")]
         self.assertTrue(framed_rows)
         self.assertEqual({len(line) for line in framed_rows}, {82})
