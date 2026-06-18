@@ -38,6 +38,10 @@ def render_with_config(home: Path, config_text: str) -> str:
 
 
 def render_without_config(home: Path) -> str:
+    hermes_dir = home / ".hermes"
+    hermes_dir.mkdir()
+    (hermes_dir / "active_profile").write_text("master-1-codex\n", encoding="utf-8")
+
     bin_dir = home / "bin"
     bin_dir.mkdir()
     (bin_dir / "tmux").write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
