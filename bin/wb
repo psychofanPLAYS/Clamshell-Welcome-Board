@@ -24,12 +24,13 @@ Usage:
   wb ports scan      Read-only listening-port scan
   wb ports explain   Read-only plain-English port explanation
   wb ports plan      Print a dry-run lockdown plan
+  wb ports snapshot  Save current reviewed listeners as the warning baseline
 
 Also installed:
   welcomeboard -> wb
 
 Safety:
-  wb ports scan/explain/plan are read-only. Firewall changes are not
+  wb ports scan/explain/plan/snapshot are read-only. Firewall changes are not
   implemented here.
 EOF
 }
@@ -72,13 +73,14 @@ Available themes:
   cyan-dark       cool cyan rails, dark terminal
   amber-terminal  orange/gold terminal style
   green-phosphor  green monochrome terminal style
+  light-paper     light terminal, dark text, interview-safe
   mono-safe       minimal color for compatibility
 EOF
 }
 
 wb_theme_set() {
   case "$1" in
-    cyan-dark|amber-terminal|green-phosphor|mono-safe)
+    cyan-dark|amber-terminal|green-phosphor|light-paper|mono-safe)
       wb_config_set WB_THEME "$1"
       printf 'Theme set: %s\n' "$1"
       ;;
@@ -91,7 +93,7 @@ wb_theme_set() {
 }
 
 wb_setup() {
-  local name banner theme sections
+  local name banner theme sections custom_file service_ports baseline_file hermes_label openclaw_path
   printf 'Display name [%s]: ' "${USER:-you}"
   read -r name
   name="${name:-${USER:-you}}"
@@ -105,13 +107,28 @@ wb_setup() {
   read -r theme
   theme="${theme:-cyan-dark}"
   case "$theme" in
-    cyan-dark|amber-terminal|green-phosphor|mono-safe) ;;
+    cyan-dark|amber-terminal|green-phosphor|light-paper|mono-safe) ;;
     *) printf 'Unknown theme, using cyan-dark.\n'; theme="cyan-dark" ;;
   esac
 
-  printf 'Sections [machine tmux commands]: '
+  printf 'Sections [machine services identity security health hermes tmux commands notes]: '
   read -r sections
-  sections="${sections:-machine tmux commands}"
+  sections="${sections:-machine services identity security health hermes tmux commands notes}"
+
+  printf 'Custom commands file [blank to skip]: '
+  read -r custom_file
+
+  printf 'Service ports to watch, name:port pairs [blank for auto]: '
+  read -r service_ports
+
+  printf 'Hermes label [blank for auto/skip]: '
+  read -r hermes_label
+
+  printf 'OpenClaw path [blank to auto-detect later]: '
+  read -r openclaw_path
+
+  printf 'Port baseline file [~/.local/state/welcome-board/ports-baseline.txt]: '
+  read -r baseline_file
 
   mkdir -p "$(wb_config_dir)"
   {
@@ -119,15 +136,21 @@ wb_setup() {
     printf 'WB_BANNER_TEXT=%s\n' "$(wb_config_quote "$banner")"
     printf 'WB_THEME=%s\n' "$(wb_config_quote "$theme")"
     printf 'WB_SECTIONS=%s\n' "$(wb_config_quote "$sections")"
+    [ -n "$custom_file" ] && printf 'WB_CUSTOM_COMMANDS_FILE=%s\n' "$(wb_config_quote "$custom_file")"
+    [ -n "$service_ports" ] && printf 'WB_SERVICE_PORTS=%s\n' "$(wb_config_quote "$service_ports")"
+    [ -n "$hermes_label" ] && printf 'WB_HERMES_LABEL=%s\n' "$(wb_config_quote "$hermes_label")"
+    [ -n "$openclaw_path" ] && printf 'WB_OPENCLAW_PATH=%s\n' "$(wb_config_quote "$openclaw_path")"
+    [ -n "$baseline_file" ] && printf 'WB_PORT_BASELINE_FILE=%s\n' "$(wb_config_quote "$baseline_file")"
   } > "$WB_CONFIG"
 
   printf 'Wrote %s\n' "$WB_CONFIG"
+  printf 'Tip: review wb ports explain, then run wb ports snapshot to create the drift baseline.\n'
 }
 
 wb_sections() {
   local sections
   sections="$(wb_config_get WB_SECTIONS)"
-  printf 'Sections: %s\n' "${sections:-machine tmux commands}"
+  printf 'Sections: %s\n' "${sections:-machine services identity security health hermes tmux commands notes}"
 }
 
 wb_doctor_cmd() {
@@ -188,7 +211,7 @@ wb_ports_scan() {
 
 wb_ports_lines() {
   if command -v ss >/dev/null 2>&1; then
-    ss -tulpen 2>/dev/null || ss -tuln
+    ss -tulnHp 2>/dev/null || ss -tuln
   elif command -v lsof >/dev/null 2>&1; then
     lsof -iTCP -sTCP:LISTEN -P -n
   elif command -v netstat >/dev/null 2>&1; then
@@ -197,6 +220,84 @@ wb_ports_lines() {
     printf 'No supported port scanner found (need ss, lsof, or netstat).\n' >&2
     return 1
   fi
+}
+
+wb_ports_short_name() {
+  case "$1" in
+    22) printf 'SSH' ;;
+    53) printf 'DNS' ;;
+    137|138|139|445) printf 'Samba' ;;
+    631) printf 'printing' ;;
+    3000|5173|8000|8080) printf 'common dev server' ;;
+    5432) printf 'Postgres' ;;
+    6379) printf 'Redis' ;;
+    5353) printf 'mDNS' ;;
+    6333) printf 'vector DB' ;;
+    6900) printf 'shim dash' ;;
+    6901) printf 'embedder' ;;
+    6902) printf 'reranker' ;;
+    6903) printf 'Honcho' ;;
+    6904) printf 'PupCam' ;;
+    6905) printf 'shim log' ;;
+    6906) printf 'cockpit aux' ;;
+    6907) printf 'messageboard' ;;
+    6908) printf 'cockpit' ;;
+    6909) printf 'local app' ;;
+    6911) printf 'Kenny LM' ;;
+    6912) printf 'Hermes API' ;;
+    6913) printf 'Kenny gate' ;;
+    6915) printf 'Hermes dash' ;;
+    6916) printf 'Hermes' ;;
+    6917) printf 'OR guard' ;;
+    6925) printf 'auto-life' ;;
+    6974) printf 'PupCam' ;;
+    6996) printf 'LM proxy' ;;
+    443|8443|8444) printf 'Tailnet HTTPS' ;;
+    9277) printf 'Warp terminal' ;;
+    36900) printf 'cockpit' ;;
+    37360) printf 'media' ;;
+    *) printf 'port %s' "$1" ;;
+  esac
+}
+
+wb_ports_summary_lines() {
+  local line field addr port process
+  wb_ports_lines | while IFS= read -r line; do
+    case "$line" in
+      Netid*|State*|COMMAND*|"") continue ;;
+    esac
+    addr=""
+    port=""
+    for field in $line; do
+      field="${field#[}"
+      field="${field%]}"
+      if [[ "$field" =~ ^(.+):([0-9]+)$ ]]; then
+        addr="${BASH_REMATCH[1]}"
+        port="${BASH_REMATCH[2]}"
+        break
+      fi
+    done
+    [ -n "$port" ] || continue
+    process="unknown"
+    if [[ "$line" =~ users:\(\(\"([^\"]+)\" ]]; then
+      process="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ([A-Za-z0-9_.-]+),pid= ]]; then
+      process="${BASH_REMATCH[1]}"
+    fi
+    printf '%s:%s(%s)\n' "$(wb_ports_short_name "$port")" "$port" "$process"
+  done | sort -u
+}
+
+wb_ports_snapshot() {
+  local baseline dir
+  baseline="$(wb_config_get WB_PORT_BASELINE_FILE)"
+  baseline="${baseline:-$HOME/.local/state/welcome-board/ports-baseline.txt}"
+  dir="$(dirname -- "$baseline")"
+  mkdir -p "$dir"
+  wb_ports_summary_lines > "$baseline"
+  printf 'Saved reviewed port baseline: %s\n' "$baseline"
+  printf 'Review this file when SECURITY warns about newly open listeners.\n'
+  printf 'No firewall changes were made.\n'
 }
 
 wb_ports_report() {
@@ -233,8 +334,6 @@ wb_ports_report() {
     if [[ "$line" =~ users:\(\(\"([^\"]+)\" ]]; then
       process="${BASH_REMATCH[1]}"
     elif [[ "$line" =~ ([A-Za-z0-9_.-]+),pid= ]]; then
-      process="${BASH_REMATCH[1]}"
-    elif [[ "$line" =~ ^([A-Za-z0-9_.-]+)[[:space:]] ]]; then
       process="${BASH_REMATCH[1]}"
     fi
 
@@ -293,8 +392,9 @@ case "$cmd" in
       scan) wb_ports_scan ;;
       explain) wb_ports_report explain ;;
       plan) wb_ports_report plan ;;
+      snapshot) wb_ports_snapshot ;;
       apply|rollback) printf 'wb ports %s is not implemented because it would be mutating. Use scan/explain/plan first.\n' "$2" >&2; exit 2 ;;
-      ""|help|-h|--help) printf 'Usage: wb ports {scan|explain|plan}\n' ;;
+      ""|help|-h|--help) printf 'Usage: wb ports {scan|explain|plan|snapshot}\n' ;;
       *) printf 'Unknown ports command: %s\n' "$2" >&2; exit 2 ;;
     esac
     ;;

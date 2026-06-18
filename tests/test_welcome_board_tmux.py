@@ -45,7 +45,11 @@ class TmuxSectionTests(unittest.TestCase):
 
         self.assertIn("TMUX", rendered)
         self.assertRegex(rendered, r"work\s+3 windows · attached")
-        self.assertRegex(rendered, r"very-long-s\.\.\.\s+1 window · detached")
+        self.assertRegex(rendered, r"very-long-session-name\s+1 window · detached")
+        self.assertIn("tmux 3", rendered)
+        self.assertIn("tmux kill 1 2", rendered)
+        self.assertIn("tmux rename 3 work", rendered)
+        self.assertIn("Ctrl-b d", rendered)
         framed_rows = [line for line in rendered.splitlines() if line.startswith("  │")]
         self.assertTrue(framed_rows)
         self.assertEqual({len(line) for line in framed_rows}, {82})

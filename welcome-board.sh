@@ -33,7 +33,7 @@ __wb_load_config() {
   if [ -r "$cfg" ]; then
     while IFS='=' read -r key raw || [ -n "$key" ]; do
       case "$key" in
-        WB_DISPLAY_NAME|WB_BANNER_TEXT|WB_THEME|WB_SECTIONS|WB_EXPECTED_PORTS|WB_SERVICE_PORTS|WELCOME_BOARD_MACHINE_HISTORY)
+        WB_DISPLAY_NAME|WB_BANNER_TEXT|WB_THEME|WB_SECTIONS|WB_EXPECTED_PORTS|WB_SERVICE_PORTS|WELCOME_BOARD_MACHINE_HISTORY|WB_CUSTOM_COMMANDS_FILE|WB_PORT_BASELINE_FILE|WB_HERMES_LABEL|WB_OPENCLAW_PATH)
           value="$(__wb_config_value "$raw")"
           printf -v "$key" '%s' "$value"
           ;;
@@ -43,7 +43,7 @@ __wb_load_config() {
   : "${WB_DISPLAY_NAME:=${USER:-friend}}"
   : "${WB_BANNER_TEXT:=CLAMSHELL}"
   : "${WB_THEME:=cyan-dark}"
-  : "${WB_SECTIONS:=machine tmux commands}"
+  : "${WB_SECTIONS:=machine services identity security health hermes tmux commands notes}"
 }
 
 __wb_upper() {
@@ -71,6 +71,13 @@ __wb_paint() {
       WB_CYN=$'\e[38;5;120m'; WB_HDR=$'\e[38;5;121m'; WB_AC=$'\e[38;5;42m'
       WB_LBL=$'\e[1m\e[38;5;119m'; WB_DEV=$'\e[38;5;151m'
       WB_GOLD=$'\e[1m\e[38;5;154m'; WB_NEON_ORANGE=$'\e[1m\e[38;5;118m'
+      ;;
+    light-paper)
+      WB_GRN=$'\e[38;5;29m'; WB_RED=$'\e[38;5;124m'; WB_YEL=$'\e[38;5;130m'
+      WB_CYN=$'\e[38;5;25m'; WB_PNK=$'\e[38;5;89m'; WB_HDR=$'\e[38;5;24m'
+      WB_AC=$'\e[38;5;31m'; WB_D=$'\e[38;5;244m'; WB_GRY=$'\e[38;5;240m'
+      WB_WHT=$'\e[38;5;235m'; WB_LBL=$'\e[1m\e[38;5;18m'; WB_DEV=$'\e[38;5;94m'
+      WB_GOLD=$'\e[1m\e[38;5;130m'; WB_NEON_ORANGE=$'\e[1m\e[38;5;166m'
       ;;
     mono-safe)
       WB_GRN=$'\e[38;5;252m'; WB_RED=$'\e[38;5;252m'; WB_YEL=$'\e[38;5;252m'
@@ -111,6 +118,29 @@ __wb_hdr() {
 }
 __wb_row() { printf '   %b\n' "$1"; }       # indented body row
 __wb_lbl() { printf '%s%-11s%s' "$WB_GRY" "$1" "$WB_R"; }   # fixed grey label col
+__wb_trunc() {
+  local text="$1" max="${2:-24}"
+  if [ "${#text}" -gt "$max" ]; then
+    printf '%s...' "${text:0:$((max - 3))}"
+  else
+    printf '%s' "$text"
+  fi
+}
+__wb_has_port() {
+  local port="$1" line field found=1
+  while read -r line; do
+    for field in $line; do
+      field="${field#[}"
+      field="${field%]}"
+      if [[ "$field" =~ :${port}$ ]]; then
+        found=0
+        break
+      fi
+    done
+    [ "$found" -eq 0 ] && break
+  done <<< "$WB_LISTENP"
+  return "$found"
+}
 
 # ---- time-aware rotating greeting (first name only, never surname) ----------
 __wb_pick() {
@@ -278,7 +308,10 @@ __wb_zrow() {                                         # $1 = pre-built, WB_FR-re
   # B = darker  band (bg 233) -> dim grey goes BRIGHTER (249) so it reads
   # dim = teal-grey (blue+green tint) so secondary text stays visible on BOTH bands.
   # lighter band gets a mid teal, darker band a brighter teal — readable either way.
-  if ((_WB_ZEB%2==0)); then bg=$'\e[48;5;236m'; dim=$'\e[38;5;109m'
+  if [ "${WB_THEME:-cyan-dark}" = "light-paper" ]; then
+    if ((_WB_ZEB%2==0)); then bg=$'\e[48;5;254m'; dim=$'\e[38;5;244m'
+    else                       bg=$'\e[48;5;255m'; dim=$'\e[38;5;242m'; fi
+  elif ((_WB_ZEB%2==0)); then bg=$'\e[48;5;236m'; dim=$'\e[38;5;109m'
   else                       bg=$'\e[48;5;233m'; dim=$'\e[38;5;116m'; fi
   _WB_ZEB=$(( _WB_ZEB+1 ))
   c=${c//$WB_DM/$dim}                                 # swap the adaptive-dim sentinel for this stripe's grey
@@ -517,31 +550,163 @@ __wb_machine() {
   __wb_mrow "DISK" "${dp:-0}"    "$(__wb_hist_graph disk "${dp:-0}")" "$(__wb_grad "${dp:-0}")${du:-?}${WB_DM}/${dt:-?} GB · root fs"
 }
 
-# ---- NETWORK (local VPN/SSH glance, no hardcoded machines) -----------------
-__wb_network() {
-  __wb_hdr "NETWORK"
-  local ts self nssh sc
-  ts=$(timeout 1 tailscale status 2>/dev/null)
+# ---- YOU ARE ON (grounded identity/session context) -------------------------
+__wb_online() {
+  __wb_hdr "YOU ARE ON"
+  local self line user tty date time idle pid rest src shown host now tmux_count ssh_count
+  host=$(hostname 2>/dev/null || printf 'unknown')
+  now=$(date '+%a %d %b · %H:%M %Z' 2>/dev/null || date 2>/dev/null)
   self=$(timeout 1 tailscale ip -4 2>/dev/null | head -1)
-  nssh=$(who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)')
-  sc=$WB_WHT; [ "${nssh:-0}" -ge 4 ] 2>/dev/null && sc=$WB_YEL
+  [ -n "$self" ] || self=$(hostname -I 2>/dev/null | awk '{print $1}')
   __wb_zreset
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'host')${WB_FR}${WB_WHT}$(__wb_trunc "$host" 24)${WB_DM} ${WB_WHT}$(uname -s 2>/dev/null)${WB_DM} · ${WB_WHT}$(uname -m 2>/dev/null)"
   if [ -n "$self" ]; then
-    __wb_zrow "${WB_LBL}$(printf '%-10s' 'vpn')${WB_FR}${WB_WHT}$(printf '%-16s' "$self")${WB_DM}local VPN address"
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'ip')${WB_FR}${WB_WHT}$(__wb_trunc "$self" 26)${WB_DM} local/tailnet address"
   elif command -v tailscale >/dev/null 2>&1; then
-    __wb_zrow "${WB_LBL}$(printf '%-10s' 'vpn')${WB_FR}${WB_DM}installed, no local address"
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'ip')${WB_FR}${WB_DM}tailscale installed, no local address"
   else
-    __wb_zrow "${WB_LBL}$(printf '%-10s' 'vpn')${WB_FR}${WB_DM}not installed"
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'ip')${WB_FR}${WB_DM}not available"
   fi
-  __wb_zrow "${WB_LBL}$(printf '%-10s' 'ssh now')${WB_FR}${sc}${nssh:-0} active${WB_FR} ${WB_DM}remote terminal sessions"
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'time')${WB_FR}${WB_WHT}$(__wb_trunc "$now" 42)"
+  ssh_count=$(who -u 2>/dev/null | awk '$2 ~ /^pts\// {count++} END{print count+0}')
+  tmux_count=$(tmux list-sessions 2>/dev/null | wc -l | awk '{print $1}')
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'summary')${WB_FR}${WB_WHT}${ssh_count:-0}${WB_DM} terminal session(s) · ${WB_WHT}${tmux_count:-0}${WB_DM} tmux session(s)"
+  if who -u >/dev/null 2>&1; then
+    local saw=0
+    while read -r user tty date time idle pid rest; do
+      [ -n "$user" ] || continue
+      saw=1
+      src="${rest//[()]/}"
+      [ -z "$src" ] && src="local"
+      [ "$user" = "${USER:-}" ] && user="${WB_DISPLAY_NAME:-$user}"
+      shown="$(__wb_trunc "$user@$tty" 20)"
+      __wb_zrow "${WB_LBL}$(printf '%-10s' 'session')${WB_FR}${WB_WHT}$(printf '%-20s' "$shown")${WB_DM} idle ${idle:-?} · from ${WB_WHT}$(__wb_trunc "$src" 22)"
+    done < <(who -u 2>/dev/null)
+    [ "$saw" -eq 0 ] && __wb_zrow "${WB_LBL}$(printf '%-10s' 'session')${WB_FR}${WB_DM}no logged-in terminal sessions reported"
+  else
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'session')${WB_FR}${WB_DM}who command unavailable"
+  fi
+}
+__wb_network() { __wb_online; }
+
+# ---- SECURITY (port exposure summary, not raw socket spam) ------------------
+__wb_port_scope() {
+  local addr="$1"
+  addr="${addr#[}"
+  addr="${addr%]}"
+  case "$addr" in
+    127.*|::1|localhost) printf 'LOOPBACK' ;;
+    100.*|fd7a:*|fe80:*) printf 'VPN' ;;
+    0.0.0.0|::|'*') printf 'LAN/ALL' ;;
+    10.*|172.16.*|172.17.*|172.18.*|172.19.*|172.2?.*|172.30.*|172.31.*|192.168.*) printf 'LAN' ;;
+    *) printf 'HOST' ;;
+  esac
+}
+__wb_port_summary() {
+  local want_scope="${1:-}" line field local_addr addr port process scope known
+  while read -r line; do
+    [ -n "$line" ] || continue
+    case "$line" in Netid*|State*|COMMAND*) continue ;; esac
+    local_addr=""
+    port=""
+    for field in $line; do
+      field="${field#[}"
+      field="${field%]}"
+      if [[ "$field" =~ ^(.+):([0-9]+)$ ]]; then
+        local_addr="$field"
+        port="${BASH_REMATCH[2]}"
+        break
+      fi
+    done
+    [ -n "$local_addr" ] || continue
+    addr="${local_addr%:*}"
+    addr="${addr#[}"
+    addr="${addr%]}"
+    addr="${addr%\%*}"
+    [[ "$port" =~ ^[0-9]+$ ]] || continue
+    scope="$(__wb_port_scope "$addr")"
+    [ -n "$want_scope" ] && [ "$scope" != "$want_scope" ] && continue
+    process="unknown"
+    if [[ "$line" =~ users:\(\(\"([^\"]+)\" ]]; then
+      process="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ([A-Za-z0-9_.-]+),pid= ]]; then
+      process="${BASH_REMATCH[1]}"
+    fi
+    known="$(__wb_portname "$port")"
+    printf '%s:%s(%s)\n' "$known" "$port" "$process"
+  done <<< "$WB_LISTENP" | awk '!seen[$0]++'
+}
+__wb_count_lines() {
+  sed '/^$/d' | wc -l | awk '{print $1}'
+}
+__wb_join_items() {
+  paste -sd ' ' - 2>/dev/null | sed 's/^ *//;s/ *$//'
+}
+__wb_ports() {
+  __wb_hdr "SECURITY"
+  __wb_zreset
+  local lan vpn loop lan_count vpn_count loop_count lan_items vpn_items baseline_path current_ports new_ports new_count
+  lan="$(__wb_port_summary LAN; __wb_port_summary LAN/ALL)"
+  vpn="$(__wb_port_summary VPN)"
+  loop="$(__wb_port_summary LOOPBACK)"
+  lan_count=$(printf '%s\n' "$lan" | __wb_count_lines)
+  vpn_count=$(printf '%s\n' "$vpn" | __wb_count_lines)
+  loop_count=$(printf '%s\n' "$loop" | __wb_count_lines)
+  lan_items=$(printf '%s\n' "$lan" | head -5 | __wb_join_items)
+  vpn_items=$(printf '%s\n' "$vpn" | head -4 | __wb_join_items)
+  [ -n "$lan_items" ] || lan_items="none"
+  [ -n "$vpn_items" ] || vpn_items="none"
+  if [ "$lan_count" -gt 0 ] 2>/dev/null; then
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'LAN/ALL')${WB_FR}${WB_YEL}${lan_count} exposed${WB_FR} ${WB_DM}$(__wb_trunc "$lan_items" 49)"
+  else
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'LAN/ALL')${WB_FR}${WB_GRN}0 exposed${WB_FR} ${WB_DM}no all-interface or LAN listeners"
+  fi
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'VPN')${WB_FR}${WB_WHT}${vpn_count}${WB_FR}${WB_DM} tailnet listeners · ${WB_WHT}$(__wb_trunc "$vpn_items" 43)"
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'loopback')${WB_FR}${WB_WHT}${loop_count}${WB_FR}${WB_DM} local-only listeners"
+  baseline_path="${WB_PORT_BASELINE_FILE:-$HOME/.local/state/welcome-board/ports-baseline.txt}"
+  current_ports=$(printf '%s\n%s\n%s\n' "$lan" "$vpn" "$loop" | sed '/^$/d' | sort -u)
+  if [ -r "$baseline_path" ]; then
+    new_ports=$(comm -13 <(sed '/^$/d' "$baseline_path" | sort -u) <(printf '%s\n' "$current_ports" | sort -u) 2>/dev/null || true)
+    new_count=$(printf '%s\n' "$new_ports" | __wb_count_lines)
+    if [ "$new_count" -gt 0 ] 2>/dev/null; then
+      __wb_zrow "${WB_LBL}$(printf '%-10s' 'new open')${WB_FR}${WB_RED}${new_count} changed${WB_FR} ${WB_DM}$(__wb_trunc "$(printf '%s\n' "$new_ports" | head -4 | __wb_join_items)" 48)"
+    else
+      __wb_zrow "${WB_LBL}$(printf '%-10s' 'new open')${WB_FR}${WB_GRN}none${WB_FR} ${WB_DM}matches saved baseline"
+    fi
+  else
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'new open')${WB_FR}${WB_YEL}unknown${WB_FR} ${WB_DM}run ${WB_CYN}wb ports snapshot${WB_DM} after review"
+  fi
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'inspect')${WB_FR}${WB_CYN}wb ports scan${WB_FR} ${WB_DM}raw · ${WB_CYN}wb ports explain${WB_DM} advice · ${WB_CYN}wb ports plan${WB_DM} dry-run"
 }
 
 # ---- LOCKS (security at a glance) ------------------------------------------
 __wb_portname() {
   case "$1" in
-    22) echo SSH;; 53) echo DNS;; 139|445) echo Samba;;
-    631) echo printing;; 5432) echo Postgres;; 6379) echo Redis;;
+    22) echo SSH;; 53) echo DNS;; 137|138|139|445) echo Samba;;
+    631) echo printing;; 5432) echo Postgres;; 6379) echo Redis;; 5353) echo mDNS;;
     6333) echo "vector DB";;
+    6900) echo "shim dash";;
+    6901) echo embedder;;
+    6902) echo reranker;;
+    6903) echo Honcho;;
+    6904) echo PupCam;;
+    6905) echo "shim log";;
+    6906) echo "cockpit aux";;
+    6907) echo messageboard;;
+    6908) echo cockpit;;
+    6909) echo "local app";;
+    6911) echo "Kenny LM";;
+    6912) echo "Hermes API";;
+    6913) echo "Kenny gate";;
+    6915) echo "Hermes dash";;
+    6916) echo Hermes;;
+    6917) echo "OR guard";;
+    6925) echo auto-life;;
+    6974) echo PupCam;;
+    6996) echo "LM proxy";;
+    443|8443|8444) echo "Tailnet HTTPS";;
+    9277) echo "Warp terminal";;
+    36900) echo cockpit;;
     37360) echo media;; *) echo "port $1";;
   esac
 }
@@ -593,16 +758,73 @@ __wb_services() {
   local e
   for e in ${WB_SERVICE_PORTS:-}; do svc+=("$e"); done
   if [ "${#svc[@]}" -eq 0 ]; then
+    svc=(
+      "SSH:22"
+      "dashboard:6900"
+      "embedder:6901"
+      "reranker:6902"
+      "honcho:6903"
+      "pupcam:6904"
+      "kenny-gate:6913"
+      "hermes:6916"
+      "qdrant:6333"
+      "cockpit:36900"
+    )
+  fi
+  local any_up=0
+  for e in "${svc[@]}"; do
+    if __wb_has_port "${e##*:}"; then any_up=1; break; fi
+  done
+  if [ "$any_up" -eq 0 ] && [ -z "${WB_SERVICE_PORTS:-}" ]; then
+    __wb_zreset
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'services')${WB_FR}${WB_DM}no known service ports found; set WB_SERVICE_PORTS=\"name:port\""
+    return
+  fi
+  if [ "${#svc[@]}" -eq 0 ]; then
     __wb_zreset
     __wb_zrow "${WB_LBL}$(printf '%-10s' 'services')${WB_FR}${WB_DM}set WB_SERVICE_PORTS=\"name:port name:port\" to monitor apps"
     return
   fi
-  local up="" down="" e n p
-  for e in "${svc[@]}"; do n="${e%:*}"; p="${e##*:}"
-    if echo "$WB_LISTEN" | grep -q ":$p "; then up="$up, $n"; else down="$down, $n"; fi; done
+  local up="" down="" e n p count=0
   __wb_zreset
-  if [ -z "$down" ]; then __wb_zrow "${WB_GRN}${WB_B}✓ All up.${WB_FR} ${WB_DM}${up#,}"
-  else __wb_zrow "${WB_RED}${WB_B}⚠ Down:${WB_FR}${WB_RED}${down#,}${WB_FR}   ${WB_DM}up:${up#,}"; fi
+  for e in "${svc[@]}"; do n="${e%:*}"; p="${e##*:}"
+    if __wb_has_port "$p"; then
+      __wb_zrow "${WB_LBL}$(printf '%-10s' "$(__wb_trunc "$n" 10)")${WB_FR}${WB_GRN}up${WB_FR} ${WB_DM}:${p} · ${WB_WHT}$(__wb_portname "$p")"
+      count=$((count + 1))
+    elif [ -n "${WB_SERVICE_PORTS:-}" ]; then
+      __wb_zrow "${WB_LBL}$(printf '%-10s' "$(__wb_trunc "$n" 10)")${WB_FR}${WB_RED}down${WB_FR} ${WB_DM}:${p}"
+      count=$((count + 1))
+    fi
+    [ "$count" -ge 8 ] && break
+  done
+}
+
+__wb_health() {
+  __wb_hdr "HEALTH"
+  __wb_zreset
+  local lan_count loop_count baseline_path new_ports new_count current_ports disk_pct mem_pct
+  lan_count=$(( $( { __wb_port_summary LAN; __wb_port_summary LAN/ALL; } | __wb_count_lines ) ))
+  loop_count=$( __wb_port_summary LOOPBACK | __wb_count_lines )
+  baseline_path="${WB_PORT_BASELINE_FILE:-$HOME/.local/state/welcome-board/ports-baseline.txt}"
+  current_ports=$( { __wb_port_summary LAN; __wb_port_summary LAN/ALL; __wb_port_summary VPN; __wb_port_summary LOOPBACK; } | sed '/^$/d' | sort -u)
+  if [ -r "$baseline_path" ]; then
+    new_ports=$(comm -13 <(sed '/^$/d' "$baseline_path" | sort -u) <(printf '%s\n' "$current_ports" | sort -u) 2>/dev/null || true)
+    new_count=$(printf '%s\n' "$new_ports" | __wb_count_lines)
+  else
+    new_count=-1
+  fi
+  if [ "$new_count" -gt 0 ] 2>/dev/null; then
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'security')${WB_FR}${WB_RED}alert${WB_FR} ${WB_DM}${new_count} newly open listener(s) since baseline"
+  elif [ "$new_count" -eq 0 ] 2>/dev/null; then
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'security')${WB_FR}${WB_GRN}steady${WB_FR} ${WB_DM}no newly open listeners"
+  else
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'security')${WB_FR}${WB_YEL}baseline unset${WB_FR} ${WB_DM}review then run ${WB_CYN}wb ports snapshot"
+  fi
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'exposure')${WB_FR}${WB_WHT}${lan_count}${WB_DM} LAN/ALL · ${WB_WHT}${loop_count}${WB_DM} loopback"
+  disk_pct=$(df -P / 2>/dev/null | awk 'NR==2{gsub(/%/,"",$5); print $5}')
+  mem_pct=$(free 2>/dev/null | awk '/^Mem:/{printf "%d", $3*100/$2}')
+  [ -n "$disk_pct" ] && __wb_zrow "${WB_LBL}$(printf '%-10s' 'disk')${WB_FR}$(__wb_grad "$disk_pct")${disk_pct}%${WB_FR} ${WB_DM}root filesystem"
+  [ -n "$mem_pct" ] && __wb_zrow "${WB_LBL}$(printf '%-10s' 'memory')${WB_FR}$(__wb_grad "$mem_pct")${mem_pct}%${WB_FR} ${WB_DM}RAM in use"
 }
 
 # ---- TMUX (active terminal sessions) ---------------------------------------
@@ -624,13 +846,62 @@ __wb_tmux() {
   while IFS=$'\t' read -r name windows attached; do
     [ -z "$name" ] && continue
     shown="$name"
-    [ "${#shown}" -gt 14 ] && shown="${shown:0:11}..."
+    [ "${#shown}" -gt 32 ] && shown="${shown:0:29}..."
     noun="windows"
     [ "${windows:-0}" = "1" ] && noun="window"
     color="$WB_DM"
     [ "$attached" = "attached" ] && color="$WB_GRN"
-    __wb_zrow "${WB_LBL}$(printf '%-15s' "$shown")${WB_FR} ${WB_WHT}${windows:-?} ${noun}${WB_DM} · ${color}${attached:-detached}${WB_FR}"
+    __wb_zrow "${WB_LBL}$(printf '%-32s' "$shown")${WB_FR} ${WB_WHT}${windows:-?} ${noun}${WB_DM} · ${color}${attached:-detached}${WB_FR}"
   done <<< "$sessions"
+  __wb_zrow "${WB_LBL}$(printf '%-32s' 'jump')${WB_FR} ${WB_CYN}tmux 3${WB_DM} or ${WB_CYN}tmux3${WB_DM} · join numbered session"
+  __wb_zrow "${WB_LBL}$(printf '%-32s' 'manage')${WB_FR} ${WB_CYN}tmux kill 1 2${WB_DM} · ${WB_CYN}tmux rename 3 work${WB_DM}"
+  __wb_zrow "${WB_LBL}$(printf '%-32s' 'leave')${WB_FR} ${WB_CYN}Ctrl-b d${WB_DM} detach · ${WB_CYN}exit${WB_DM} close pane"
+}
+
+__wb_hermes() {
+  __wb_hdr "HERMES"
+  __wb_zreset
+  local profile label
+  label="${WB_HERMES_LABEL:-Hermes Agent}"
+  profile=$(cat "$HOME/.hermes/active_profile" 2>/dev/null | head -n1)
+  [ -z "$profile" ] && profile="not selected"
+  if command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ]; then
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'profile')${WB_FR}${WB_WHT}$(__wb_trunc "$profile" 24)${WB_DM} · ${WB_WHT}$(__wb_trunc "$label" 28)"
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'master-1')${WB_FR}${WB_CYN}m1${WB_DM}/${WB_CYN}m1c${WB_DM}/${WB_CYN}m1s${WB_DM}/${WB_CYN}m1g${WB_DM} chat status gateway · ${WB_CYN}m1up${WB_DM}/${WB_CYN}m1down${WB_DM}/${WB_CYN}m1re"
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'master-2')${WB_FR}${WB_CYN}m2${WB_DM}/${WB_CYN}m2c${WB_DM}/${WB_CYN}m2s${WB_DM}/${WB_CYN}m2g${WB_DM} local worker · ${WB_CYN}m2up${WB_DM}/${WB_CYN}m2down${WB_DM}/${WB_CYN}m2re"
+  else
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'hermes')${WB_FR}${WB_DM}not installed; skip this section or configure WB_HERMES_LABEL later"
+  fi
+}
+
+__wb_custom() {
+  [ -r "${WB_CUSTOM_COMMANDS_FILE:-}" ] || return 0
+  __wb_hdr "CUSTOM"
+  __wb_zreset
+  local line label cmd hint count=0
+  while IFS='|' read -r label cmd hint || [ -n "$label$cmd$hint" ]; do
+    [ -n "$label" ] || continue
+    case "$label" in \#*) continue ;; esac
+    __wb_cmdrow "$(__wb_trunc "$label" 8)" "${WB_CYN}$(__wb_trunc "$cmd" 28)${WB_FR} ${WB_DM}$(__wb_trunc "$hint" 34)"
+    count=$((count + 1))
+    [ "$count" -ge 8 ] && break
+  done < "$WB_CUSTOM_COMMANDS_FILE"
+}
+
+__wb_notes() {
+  __wb_hdr "NOTES"
+  __wb_zreset
+  local openclaw_path="${WB_OPENCLAW_PATH:-$HOME/_openCLAW/_OPENCLAW-HOME}" hermes_label="${WB_HERMES_LABEL:-Hermes optional}"
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'security')${WB_FR}${WB_DM}default-deny firewall belongs in a reviewed plan, not shell startup"
+  __wb_zrow "${WB_LBL}$(printf '%-10s' 'ports')${WB_FR}${WB_DM}review expected listeners, then ${WB_CYN}wb ports snapshot${WB_DM}"
+  if command -v hermes >/dev/null 2>&1 || [ -d "$HOME/.hermes" ] || [ -n "${WB_HERMES_LABEL:-}" ]; then
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'Hermes')${WB_FR}${WB_WHT}$(__wb_trunc "$hermes_label" 42)"
+  fi
+  if [ -d "$openclaw_path" ]; then
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'OpenClaw')${WB_FR}${WB_GRN}configured${WB_FR} ${WB_DM}$(__wb_trunc "$openclaw_path" 43)"
+  else
+    __wb_zrow "${WB_LBL}$(printf '%-10s' 'OpenClaw')${WB_FR}${WB_DM}not found; installer should ask before adding OpenClaw rows"
+  fi
 }
 
 # ---- COMMANDS (cyan = copyable). tmux reminders kept. ----------------------
@@ -641,11 +912,10 @@ __wb_cmdrow() {
 __wb_commands() {
   __wb_hdr "COMMANDS"
   __wb_zreset
-  __wb_cmdrow "BOARD"  "${WB_CYN}wb${WB_FR} ${WB_D}render${WB_FR}   ${WB_CYN}wb help${WB_FR}   ${WB_CYN}welcomeboard${WB_FR}"
-  __wb_cmdrow "SETUP"  "${WB_CYN}wb setup${WB_FR} ${WB_D}name, banner, theme, sections${WB_FR}   ${WB_CYN}wb theme${WB_FR}"
-  __wb_cmdrow "PORTS"  "${WB_CYN}wb ports explain${WB_FR} ${WB_D}read-only map${WB_FR}   ${WB_CYN}wb ports plan${WB_FR} ${WB_D}dry run${WB_FR}"
-  __wb_cmdrow "TMUX"   "${WB_D}new:${WB_FR} ${WB_CYN}tmux new -s work${WB_FR}   ${WB_D}join:${WB_FR} ${WB_CYN}tmux attach -t work${WB_FR}"
-  __wb_cmdrow ""       "${WB_D}detach:${WB_FR} ${WB_CYN}Ctrl-b d${WB_FR}   ${WB_D}list:${WB_FR} ${WB_CYN}tmux ls${WB_FR}"
+  __wb_cmdrow "BOARD"  "${WB_CYN}restart${WB_FR} ${WB_D}reload shell/board${WB_FR}   ${WB_CYN}wb render${WB_FR} ${WB_D}preview"
+  __wb_cmdrow "SETUP"  "${WB_CYN}wb setup${WB_FR} ${WB_D}personalize${WB_FR}   ${WB_CYN}wb theme${WB_FR}   ${WB_CYN}wb sections${WB_FR}"
+  __wb_cmdrow "PORTS"  "${WB_CYN}wb ports explain${WB_FR} ${WB_D}advice${WB_FR}   ${WB_CYN}wb ports snapshot${WB_FR} ${WB_D}save baseline"
+  __wb_cmdrow "TMUX"   "${WB_CYN}tmux ls${WB_FR}   ${WB_CYN}tmux new work${WB_FR}   ${WB_CYN}tmux 3${WB_FR}   ${WB_CYN}tmux kill 1 2${WB_FR}"
   __wb_cmdrow "CHECK"  "${WB_CYN}bash -n welcome-board.sh${WB_FR}   ${WB_CYN}python3 -m unittest discover -s tests -v${WB_FR}"
   [ "${WB_FRAME_ON:-0}" = 1 ] || echo
 }
@@ -666,27 +936,38 @@ __wb_render() {
   WB_FRAME_INNER=78
   WB_W=$WB_FRAME_INNER
   WB_ZW=$WB_FRAME_INNER   # zebra stripe width inside the outer frame
-  WB_LISTEN=$(ss -tlnH 2>/dev/null)
-  WB_LISTENP=$(ss -tlnHp 2>/dev/null)
+  WB_LISTEN=$(ss -tulnH 2>/dev/null)
+  WB_LISTENP=$(ss -tulnHp 2>/dev/null)
   __wb_top_space
   __wb_banner
   __wb_frame_top
   __wb_greeting_row
   __wb_section_enabled machine && __wb_machine
-  __wb_section_enabled network && __wb_network
-  __wb_section_enabled locks && __wb_locks
   __wb_section_enabled services && __wb_services
+  __wb_any_section_enabled identity online network && __wb_online
+  __wb_any_section_enabled security ports locks && __wb_ports
+  __wb_section_enabled health && __wb_health
+  __wb_section_enabled hermes && __wb_hermes
   __wb_section_enabled tmux && __wb_tmux
   __wb_section_enabled commands && __wb_commands
+  __wb_section_enabled custom && __wb_custom
+  __wb_section_enabled notes && __wb_notes
   __wb_frame_bottom
   WB_FRAME_ON=0
 }
 
 __wb_section_enabled() {
-  case " ${WB_SECTIONS:-machine tmux commands} " in
+  case " ${WB_SECTIONS:-machine services identity security health hermes tmux commands notes} " in
     *" $1 "*) return 0 ;;
     *) return 1 ;;
   esac
+}
+__wb_any_section_enabled() {
+  local section
+  for section in "$@"; do
+    __wb_section_enabled "$section" && return 0
+  done
+  return 1
 }
 
 # ---- user commands ---------------------------------------------------------

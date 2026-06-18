@@ -17,6 +17,13 @@ class AgentPromptDocsTests(unittest.TestCase):
         self.assertIn("Codex Or Claude", readme)
         self.assertIn("prompts/install-with-agent.md", readme)
         self.assertIn("Do not change firewall rules", prompt)
+        self.assertIn("display name", prompt)
+        self.assertIn("tmux", prompt)
+        self.assertIn("custom commands", prompt)
+        self.assertIn("default-deny", prompt)
+        self.assertIn("Hermes", prompt)
+        self.assertIn("OpenClaw", prompt)
+        self.assertIn("wb ports snapshot", prompt)
         self.assertIn("wb setup", prompt)
         self.assertIn("render preview", prompt)
 

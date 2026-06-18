@@ -63,6 +63,7 @@ class WbCliTests(unittest.TestCase):
         self.assertIn("wb theme", result.stdout)
         self.assertIn("wb doctor", result.stdout)
         self.assertIn("wb ports scan", result.stdout)
+        self.assertIn("wb ports snapshot", result.stdout)
         self.assertIn("read-only", result.stdout)
 
     def test_welcomeboard_wrapper_reaches_wb(self) -> None:
@@ -87,7 +88,17 @@ class WbCliTests(unittest.TestCase):
     def test_setup_writes_name_banner_theme_and_sections(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
             home = Path(raw_tmp)
-            answers = "Alex\nWORKBOX\ngreen-phosphor\nmachine tmux ports\n"
+            answers = (
+                "Alex\n"
+                "WORKBOX\n"
+                "green-phosphor\n"
+                "machine tmux ports\n"
+                "/tmp/custom-commands\n"
+                "api:8000 dashboard:6900\n"
+                "Hermes local\n"
+                "/tmp/openclaw\n"
+                "/tmp/ports-baseline.txt\n"
+            )
             result = run_wb("setup", input_text=answers, home=home)
             self.assertEqual(result.returncode, 0, result.stderr)
             config = (home / ".config" / "welcome-board" / "config").read_text(encoding="utf-8")
@@ -95,6 +106,11 @@ class WbCliTests(unittest.TestCase):
             self.assertIn('WB_BANNER_TEXT="WORKBOX"', config)
             self.assertIn('WB_THEME="green-phosphor"', config)
             self.assertIn('WB_SECTIONS="machine tmux ports"', config)
+            self.assertIn('WB_CUSTOM_COMMANDS_FILE="/tmp/custom-commands"', config)
+            self.assertIn('WB_SERVICE_PORTS="api:8000 dashboard:6900"', config)
+            self.assertIn('WB_HERMES_LABEL="Hermes local"', config)
+            self.assertIn('WB_OPENCLAW_PATH="/tmp/openclaw"', config)
+            self.assertIn('WB_PORT_BASELINE_FILE="/tmp/ports-baseline.txt"', config)
 
     def test_doctor_reports_readiness_without_mutating(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
@@ -167,6 +183,34 @@ class WbCliTests(unittest.TestCase):
         self.assertIn("SSH: do not block until you have another login path", result.stdout)
         self.assertIn("No commands were executed", result.stdout)
         self.assertNotIn("ufw enable", result.stdout)
+
+    def test_ports_snapshot_writes_review_baseline_without_firewall_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            home = Path(raw_tmp)
+            write_fake_ss(home)
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["PATH"] = f"{home / 'bin'}:{env.get('PATH', '')}"
+            env["WELCOME_BOARD_CONFIG"] = str(home / ".config" / "welcome-board" / "config")
+
+            result = subprocess.run(
+                [str(WB), "ports", "snapshot"],
+                text=True,
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+
+            baseline = home / ".local" / "state" / "welcome-board" / "ports-baseline.txt"
+            baseline_exists = baseline.exists()
+            saved = baseline.read_text(encoding="utf-8") if baseline_exists else ""
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(baseline_exists)
+        self.assertIn("SSH:22(sshd)", saved)
+        self.assertIn("common dev server:8080(python)", saved)
+        self.assertIn("Saved reviewed port baseline", result.stdout)
+        self.assertIn("No firewall changes were made", result.stdout)
 
 
 if __name__ == "__main__":

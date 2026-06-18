@@ -10,6 +10,9 @@ Use this guide when Codex, Claude, or another AI agent edits this repo.
 - Add config instead of hardcoding one user's machine names, IPs, paths, or aliases.
 - Do not mutate firewall rules, SSH settings, system services, or login shell files without showing the user the exact change first.
 - Do not add a new section unless it can fail gracefully.
+- Do not invent Hermes, OpenClaw, tmux, path, host, or port facts. Ask and configure them.
+
+For the section contract, custom command format, graph rules, and personalization examples, read [SECTION_SDK.md](SECTION_SDK.md).
 
 ## Row Layout
 
@@ -58,11 +61,12 @@ A section is good when:
 
 Themes should define colors only. They should not change layout.
 
-Planned themes:
+Supported themes:
 
 - `cyan-dark`
 - `amber-terminal`
 - `green-phosphor`
+- `light-paper`
 - `mono-safe`
 
 Every theme needs a color-stripped render test and one color-preserved manual preview before release.

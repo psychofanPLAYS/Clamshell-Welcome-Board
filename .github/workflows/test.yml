@@ -25,3 +25,29 @@ jobs:
         run: bash -n welcome-board.sh bin/wb bin/welcomeboard install.sh
       - name: Unit tests
         run: PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v
+      - name: Install smoke
+        run: |
+          tmp_home="$(mktemp -d)"
+          WELCOME_BOARD_BIN_DIR="$tmp_home/.local/bin" \
+          WELCOME_BOARD_DATA_DIR="$tmp_home/.local/share/welcome-board" \
+          WELCOME_BOARD_AGENT_BIN_DIR="$tmp_home/.AGENTS/bin" \
+          HOME="$tmp_home" ./install.sh
+          PATH="$tmp_home/.local/bin:$PATH" HOME="$tmp_home" WELCOME_BOARD_CONFIG="$tmp_home/.config/welcome-board/config" "$tmp_home/.local/bin/wb" doctor
+      - name: Render smoke
+        run: |
+          tmp_home="$(mktemp -d)"
+          mkdir -p "$tmp_home/.config/welcome-board"
+          printf '%s\n' \
+            'WB_DISPLAY_NAME="CI"' \
+            'WB_BANNER_TEXT="WORKSTATION"' \
+            'WB_THEME="cyan-dark"' \
+            'WB_SECTIONS="machine services identity security health hermes tmux commands notes"' \
+            > "$tmp_home/.config/welcome-board/config"
+          HOME="$tmp_home" WELCOME_BOARD_CONFIG="$tmp_home/.config/welcome-board/config" bash welcome-board.sh > "$tmp_home/render.ansi"
+          RENDER_PATH="$tmp_home/render.ansi" python - <<'PY'
+          import os, pathlib, re
+          text = pathlib.Path(os.environ["RENDER_PATH"]).read_text(errors="ignore")
+          clean = re.sub(r"\x1B\[[0-9;]*m", "", text).replace("\x06", "")
+          for token in ("MACHINE", "SECURITY", "HERMES", "TMUX", "COMMANDS"):
+              assert token in clean, token
+          PY

@@ -8,13 +8,12 @@ This repo started as a personal shell board. The public version needs a config-f
 - Setup asks for user name and banner text.
 - Banner regenerates from the configured text.
 - Setup asks for a color theme and offers a few choices.
-- Commands exist: `welcomeboard`, `wb`, `wb help`, `wb theme`.
+- Commands exist: `welcomeboard`, `wb`, `wb help`, `wb theme`, `wb doctor`, and `wb ports snapshot`.
 - Support command exists: `wb doctor`.
-- Setup asks which sections to enable.
-- Machine section remains core.
-- Add tmux section showing active sessions.
-- Port lockdown is available as safe read-only scan/explain/plan commands. Apply/rollback are intentionally not implemented in this version.
-- Future LLMs know how to add sections safely.
+- Setup asks which sections to enable and defaults to `machine services identity security health hermes tmux commands notes`.
+- Machine, services, grounded identity, curated security, health, Hermes, tmux, commands, and notes sections are implemented.
+- Port lockdown is available as safe read-only scan/explain/plan/snapshot commands. Apply/rollback are intentionally not implemented in this version.
+- Future LLMs know how to add sections safely through `docs/SECTION_SDK.md`.
 - Repo is safe to make public only after personal defaults are removed.
 
 ## Proposed File Layout
@@ -42,8 +41,13 @@ The current single-file `welcome-board.sh` can stay during the transition, but p
 WB_DISPLAY_NAME="Alex"
 WB_BANNER_TEXT="WORKSTATION"
 WB_THEME="cyan-dark"
-WB_SECTIONS="machine tmux commands"
+WB_SECTIONS="machine services identity security health hermes tmux commands notes"
 WELCOME_BOARD_MACHINE_HISTORY="$HOME/.local/state/welcome-board/machine-series.tsv"
+WB_PORT_BASELINE_FILE="$HOME/.local/state/welcome-board/ports-baseline.txt"
+WB_SERVICE_PORTS="ssh:22 dashboard:6900 embedder:6901 reranker:6902"
+WB_CUSTOM_COMMANDS_FILE="$HOME/.config/welcome-board/custom-commands"
+WB_HERMES_LABEL="Hermes local helper"
+WB_OPENCLAW_PATH="$HOME/OpenClaw"
 ```
 
 ## Installer Shape
@@ -56,10 +60,11 @@ WELCOME_BOARD_MACHINE_HISTORY="$HOME/.local/state/welcome-board/machine-series.t
 4. Ask banner text.
 5. Ask theme.
 6. Ask enabled board sections.
-7. Install `wb` into `~/.local/bin`.
-8. Install config under `~/.config/welcome-board/config`.
-9. Print exact shell hook lines.
-10. Run a render preview.
+7. Ask tmux workflow, custom commands, watched service ports, Hermes usage, OpenClaw usage, and port baseline choice.
+8. Install `wb` into `~/.local/bin`.
+9. Install config under `~/.config/welcome-board/config`.
+10. Print exact shell hook lines.
+11. Run a render preview.
 
 ## Tmux Section
 
@@ -67,8 +72,11 @@ The tmux section should show:
 
 ```text
 TMUX
-work     3 windows · attached
-server   1 window  · detached
+work                             3 windows · attached
+server                           1 window  · detached
+jump                             tmux 3 or tmux3 · join numbered session
+manage                           tmux kill 1 2 · tmux rename 3 work
+leave                            Ctrl-b d detach · exit close pane
 ```
 
 If tmux is missing:
@@ -95,9 +103,10 @@ Public command shape:
 wb ports scan
 wb ports explain
 wb ports plan
+wb ports snapshot
 ```
 
-The board may show port summaries later, but shell startup must stay read-only.
+The board shows curated `SECURITY` summaries and drift warnings, not raw socket dumps. Shell startup must stay read-only.
 Any future apply/rollback flow must be a separate, explicit, reversible command that asks for user approval and is covered by tests.
 
 ## CPU/GPU Notes
@@ -119,10 +128,11 @@ The repo is public-ready only when:
 - No committed defaults contain personal names, private IPs, private hostnames, or private paths.
 - Installer works from a clean temp home.
 - `wb help`, `wb theme`, and `welcomeboard` work.
-- Tmux section is implemented and tested.
-- Port scan/plan is read-only by default and tested.
+- Tmux section is implemented and tested, including numbered-session commands.
+- Port scan/explain/plan/snapshot are read-only by default and tested.
 - `wb doctor` reports readiness without mutating files or system state.
 - README install path matches real commands.
+- `docs/SECTION_SDK.md` exists and the agent prompt/skill tell installing LLMs to read it.
 - License exists.
 - A screenshot or demo output artifact exists.
 - Secret scan passes.

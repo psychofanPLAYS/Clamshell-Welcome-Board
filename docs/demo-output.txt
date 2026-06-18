@@ -1,38 +1,57 @@
 WORKSTATION
 
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
 │ Hello, ALEX. clean signal, no drama.                                         │
-│ up 3h 12m · Wed 17 Jun · 13:24                                              │
-│                                                                              │
+│ up 3h 12m · Thu 18 Jun · 13:24                                              │
 ╞══ MACHINE ═══════════════════════════════════════════════════════════════════╡
-│                                                                              │
 │                      CPU                                                     │
 │ TEMP   ███░░░░░  45% ▁▁▁▁▁▄▄▄  CPU · 45°C                                   │
 │ USAGE  ██░░░░░░  32% ▁▁▁▁▁▂▂▃  Generic CPU  8t · 2.70/3.50 GHz              │
 │ LOAD   █░░░░░░░  14% ▁▁▁▁▁▁▂▂   1.10  0.80  0.65 · up 3h 12m                │
 │                                 1m    5m    15m                              │
 │                      GPU                                                     │
-│ TEMP   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  GPU · not exposed                            │
-│ CORE   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  graphics · not exposed                       │
-│ USAGE  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  no GPU · ? W                                 │
-│ VRAM   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  ?/? MB                                       │
-│ MEMCLK ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  memory · not exposed                         │
+│ TEMP   ███░░░░░  38% ▁▁▁▁▁▃▃▃  GPU · 38°C                                   │
+│ USAGE  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  Generic GPU  P8 · 4 W                        │
+│ VRAM   ███████░  98% ▁▁▁▁▁▇▇▇  6059/6144 MB                                 │
 │                      MEMORY / DISK                                           │
 │ RAM    ████░░░░  55% ▁▁▁▁▁▄▄▄  8.6/16 GB                                    │
 │ SWAP   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  0.0/8 GB                                     │
 │ DISK   ██░░░░░░  20% ▁▁▁▁▁▂▂▂  80/400 GB · root fs                          │
-│                                                                              │
+╞══ SERVICES ══════════════════════════════════════════════════════════════════╡
+│ ssh       up :22 · SSH                                                       │
+│ dashboard up :6900 · shim dash                                               │
+│ embedder  up :6901 · embedder                                                │
+│ reranker  up :6902 · reranker                                                │
+╞══ YOU ARE ON ════════════════════════════════════════════════════════════════╡
+│ host      workstation Linux · x86_64                                         │
+│ ip        local/tailnet address                                              │
+│ summary   1 terminal session(s) · 2 tmux session(s)                          │
+│ session   Alex@pts/1           idle 00:05 · from local                       │
+╞══ SECURITY ══════════════════════════════════════════════════════════════════╡
+│ LAN/ALL   1 exposed SSH:22(sshd)                                             │
+│ VPN       1 tailnet listener · dashboard:6900(python)                        │
+│ loopback  3 local-only listeners                                             │
+│ new open  unknown run wb ports snapshot after review                         │
+│ inspect   wb ports scan raw · wb ports explain advice · wb ports plan dry-run│
+╞══ HEALTH ════════════════════════════════════════════════════════════════════╡
+│ security  baseline unset review then run wb ports snapshot                   │
+│ exposure  1 LAN/ALL · 3 loopback                                             │
+╞══ HERMES ════════════════════════════════════════════════════════════════════╡
+│ profile   master-1-codex · Hermes Agent                                      │
+│ master-1  m1/m1c/m1s/m1g chat status gateway · m1up/m1down/m1re             │
+│ master-2  m2/m2c/m2s/m2g local worker · m2up/m2down/m2re                    │
 ╞══ TMUX ══════════════════════════════════════════════════════════════════════╡
-│                                                                              │
-│ work            3 windows · attached                                         │
-│ notes           1 window · detached                                          │
-│                                                                              │
+│ work                             3 windows · attached                        │
+│ notes                            1 window · detached                         │
+│ jump                             tmux 3 or tmux3 · join numbered session     │
+│ manage                           tmux kill 1 2 · tmux rename 3 work          │
+│ leave                            Ctrl-b d detach · exit close pane           │
 ╞══ COMMANDS ══════════════════════════════════════════════════════════════════╡
-│                                                                              │
-│ BOARD    wb render   wb help   welcomeboard                                  │
-│ SETUP    wb setup name, banner, theme, sections   wb theme                   │
-│ PORTS    wb ports explain read-only map   wb ports plan dry run              │
-│ TMUX     new: tmux new -s work   join: tmux attach -t work                   │
-│ CHECK    bash -n welcome-board.sh   python3 -m unittest discover -s tests -v │
+│ BOARD    restart reload shell/board   wb render preview                      │
+│ SETUP    wb setup personalize   wb theme   wb sections                       │
+│ PORTS    wb ports explain advice   wb ports snapshot save baseline           │
+│ TMUX     tmux ls   tmux new work   tmux 3   tmux kill 1 2                    │
+╞══ NOTES ═════════════════════════════════════════════════════════════════════╡
+│ security  default-deny firewall belongs in a reviewed plan, not shell startup│
+│ ports     review expected listeners, then wb ports snapshot                  │
 └──────────────────────────────────────────────────────────────────────────────┘

@@ -20,7 +20,14 @@ class AgentSkillArtifactTests(unittest.TestCase):
         self.assertRegex(skill, r"(?s)^---\nname: welcome-board-installer\ndescription: .+?\n---")
         for required in (
             "Read README.md",
+            "docs/SECTION_SDK.md",
             "Ask the user",
+            "tmux",
+            "custom commands",
+            "default-deny",
+            "Hermes",
+            "OpenClaw",
+            "wb ports snapshot",
             "Run ./install.sh",
             "Run wb setup",
             "Run wb doctor",
