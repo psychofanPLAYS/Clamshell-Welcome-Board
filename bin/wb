@@ -8,6 +8,16 @@ WB_BOARD_FILE="${WELCOME_BOARD_BOARD_FILE:-$WB_REPO_ROOT/welcome-board.sh}"
 if [ ! -r "$WB_BOARD_FILE" ] && [ -r "$HOME/.local/share/welcome-board/welcome-board.sh" ]; then
   WB_BOARD_FILE="$HOME/.local/share/welcome-board/welcome-board.sh"
 fi
+case "$WB_BOARD_FILE" in
+  "$WB_REPO_ROOT/welcome-board.sh"|"$HOME/.local/share/welcome-board/welcome-board.sh") ;;
+  *)
+    if [ "${WELCOME_BOARD_ALLOW_UNTRUSTED_BOARD_FILE:-0}" != 1 ]; then
+      printf 'Refusing to source unexpected board file: %s\n' "$WB_BOARD_FILE" >&2
+      printf 'Set WELCOME_BOARD_ALLOW_UNTRUSTED_BOARD_FILE=1 only for local development.\n' >&2
+      exit 2
+    fi
+    ;;
+esac
 
 wb_usage() {
   cat <<'EOF'
@@ -51,6 +61,27 @@ wb_config_quote() {
   value="${value//\\/\\\\}"
   value="${value//\"/\\\"}"
   printf '"%s"' "$value"
+}
+
+wb_terminal_filter() {
+  LC_ALL=C tr -d '\000-\010\013\014\016-\037\177' | sed $'s/\x1b//g'
+}
+
+wb_terminal_text() {
+  printf '%s' "${1-}" | wb_terminal_filter
+}
+
+wb_require_home_path() {
+  local path="$1" label="$2"
+  case "$path" in
+    "$HOME"|"$HOME"/*) ;;
+    *)
+      if [ "${WELCOME_BOARD_ALLOW_OUTSIDE_HOME:-0}" != 1 ]; then
+        printf 'Refusing %s outside $HOME: %s\n' "$label" "$path" >&2
+        return 2
+      fi
+      ;;
+  esac
 }
 
 wb_config_set() {
@@ -198,11 +229,11 @@ wb_doctor() {
 
 wb_ports_scan() {
   if command -v ss >/dev/null 2>&1; then
-    ss -tuln
+    ss -tuln | wb_terminal_filter
   elif command -v lsof >/dev/null 2>&1; then
-    lsof -iTCP -sTCP:LISTEN -P -n
+    lsof -iTCP -sTCP:LISTEN -P -n | wb_terminal_filter
   elif command -v netstat >/dev/null 2>&1; then
-    netstat -an
+    netstat -an | wb_terminal_filter
   else
     printf 'No supported port scanner found (need ss, lsof, or netstat).\n' >&2
     return 1
@@ -211,11 +242,11 @@ wb_ports_scan() {
 
 wb_ports_lines() {
   if command -v ss >/dev/null 2>&1; then
-    ss -tulnHp 2>/dev/null || ss -tuln
+    (ss -tulnHp 2>/dev/null || ss -tuln) | wb_terminal_filter
   elif command -v lsof >/dev/null 2>&1; then
-    lsof -iTCP -sTCP:LISTEN -P -n
+    lsof -iTCP -sTCP:LISTEN -P -n | wb_terminal_filter
   elif command -v netstat >/dev/null 2>&1; then
-    netstat -an
+    netstat -an | wb_terminal_filter
   else
     printf 'No supported port scanner found (need ss, lsof, or netstat).\n' >&2
     return 1
@@ -284,6 +315,7 @@ wb_ports_summary_lines() {
     elif [[ "$line" =~ ([A-Za-z0-9_.-]+),pid= ]]; then
       process="${BASH_REMATCH[1]}"
     fi
+    process="$(wb_terminal_text "$process")"
     printf '%s:%s(%s)\n' "$(wb_ports_short_name "$port")" "$port" "$process"
   done | sort -u
 }
@@ -292,8 +324,10 @@ wb_ports_snapshot() {
   local baseline dir
   baseline="$(wb_config_get WB_PORT_BASELINE_FILE)"
   baseline="${baseline:-$HOME/.local/state/welcome-board/ports-baseline.txt}"
+  wb_require_home_path "$baseline" WB_PORT_BASELINE_FILE || return 2
   dir="$(dirname -- "$baseline")"
   mkdir -p "$dir"
+  [ ! -e "$baseline" ] || cp -p "$baseline" "$baseline.bak.$(date +%Y%m%d%H%M%S)"
   wb_ports_summary_lines > "$baseline"
   printf 'Saved reviewed port baseline: %s\n' "$baseline"
   printf 'Review this file when SECURITY warns about newly open listeners.\n'
@@ -336,6 +370,8 @@ wb_ports_report() {
     elif [[ "$line" =~ ([A-Za-z0-9_.-]+),pid= ]]; then
       process="${BASH_REMATCH[1]}"
     fi
+    addr="$(wb_terminal_text "$addr")"
+    process="$(wb_terminal_text "$process")"
 
     scope="LAN-visible"
     case "$addr" in

@@ -79,6 +79,15 @@ class TmuxSectionTests(unittest.TestCase):
                 "fi\n"
                 "exit 1\n",
             )
+            unsafe_rendered = render_network_section(
+                Path(raw_tmp),
+                "#!/usr/bin/env bash\n"
+                'if [ "$1" = "ls" ]; then\n'
+                "  printf 'work\\033]52;c;boom\\a: 1 windows (created Mon)\\n'\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+            )
 
         # tmux row must appear in NETWORK output
         self.assertIn("tmux", rendered)
@@ -99,6 +108,8 @@ class TmuxSectionTests(unittest.TestCase):
         framed_rows = [line for line in rendered.splitlines() if line.startswith("  │")]
         self.assertTrue(framed_rows)
         self.assertEqual({len(line) for line in framed_rows}, {82})
+        self.assertNotIn("\x1b", unsafe_rendered)
+        self.assertNotIn("\x07", unsafe_rendered)
 
     def test_tmux_no_sessions_is_explicit(self) -> None:
         """When tmux ls exits non-zero, the tmux row says 'no sessions'."""

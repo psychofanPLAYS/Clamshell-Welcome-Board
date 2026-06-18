@@ -148,6 +148,7 @@ class RollingHistoryTests(unittest.TestCase):
             recent = module._load_recent_update_receipts()
             self.assertEqual(len(recent), 1)
             self.assertEqual(recent[0]["date"], "2026-06-17")
+            self.assertEqual(module._terminal_text("Tool\x1b]52;c;boom\x07\nName", 40), "Tool Name")
 
     def test_recent_log_reader_skips_partial_first_line_when_truncated(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmpdir:

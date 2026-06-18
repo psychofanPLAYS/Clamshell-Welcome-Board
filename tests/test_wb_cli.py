@@ -126,6 +126,22 @@ class WbCliTests(unittest.TestCase):
             self.assertIn("No files, services, ports, or firewall rules were changed.", result.stdout)
             self.assertFalse((home / ".config" / "welcome-board" / "config").exists())
 
+            bad_board = home / "bad-board.sh"
+            bad_board.write_text("printf bad\\n", encoding="utf-8")
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["WELCOME_BOARD_CONFIG"] = str(home / ".config" / "welcome-board" / "config")
+            env["WELCOME_BOARD_BOARD_FILE"] = str(bad_board)
+            render_result = subprocess.run(
+                [str(WB), "render"],
+                text=True,
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+            self.assertEqual(render_result.returncode, 2)
+            self.assertIn("Refusing to source unexpected board file", render_result.stderr)
+
     def test_ports_unknown_command_does_not_apply_anything(self) -> None:
         result = run_wb("ports", "apply")
         self.assertEqual(result.returncode, 2)
@@ -204,13 +220,36 @@ class WbCliTests(unittest.TestCase):
             baseline = home / ".local" / "state" / "welcome-board" / "ports-baseline.txt"
             baseline_exists = baseline.exists()
             saved = baseline.read_text(encoding="utf-8") if baseline_exists else ""
+            result_again = subprocess.run(
+                [str(WB), "ports", "snapshot"],
+                text=True,
+                capture_output=True,
+                env=env,
+                check=False,
+            )
+            backups = list(baseline.parent.glob("ports-baseline.txt.bak.*"))
+
+            config = home / ".config" / "welcome-board" / "config"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text('WB_PORT_BASELINE_FILE="/tmp/wb-outside-baseline.txt"\n', encoding="utf-8")
+            refused = subprocess.run(
+                [str(WB), "ports", "snapshot"],
+                text=True,
+                capture_output=True,
+                env=env,
+                check=False,
+            )
 
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result_again.returncode, 0, result_again.stderr)
         self.assertTrue(baseline_exists)
         self.assertIn("SSH:22(sshd)", saved)
         self.assertIn("common dev server:8080(python)", saved)
         self.assertIn("Saved reviewed port baseline", result.stdout)
         self.assertIn("No firewall changes were made", result.stdout)
+        self.assertTrue(backups)
+        self.assertEqual(refused.returncode, 2)
+        self.assertIn("Refusing WB_PORT_BASELINE_FILE outside $HOME", refused.stderr)
 
 
 if __name__ == "__main__":

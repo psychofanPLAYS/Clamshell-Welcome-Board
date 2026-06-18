@@ -46,6 +46,16 @@ MAX_LOG_READ_BYTES = _bounded_env_int(
     4_096,
     10_485_760,
 )
+ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\)|[@-Z\\-_])")
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _terminal_text(value: Any, limit: int = 120) -> str:
+    text = str(value or "")
+    text = ANSI_RE.sub("", text)
+    text = text.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    text = CONTROL_RE.sub("", text)
+    return text[:limit]
 
 DEFAULT_PATH = ":".join(
     [
@@ -299,9 +309,9 @@ def notify_shell() -> int:
         day_label = _display_day_label(receipt_date)
         update_time = _parse_receipt_time(receipt)
         for entry in receipt.get("updated", []):
-            label = str(entry.get("label") or entry.get("key") or "Tool")
-            before = str(entry.get("before") or "unknown")
-            after = str(entry.get("after") or "unknown")
+            label = _terminal_text(entry.get("label") or entry.get("key") or "Tool", 40)
+            before = _terminal_text(entry.get("before") or "unknown", 80)
+            after = _terminal_text(entry.get("after") or "unknown", 80)
             prefix_plain = f"{day_label:>9} {update_time}"
             plain = f"{prefix_plain}  {label}: {before} -> {after}"
             colored = (

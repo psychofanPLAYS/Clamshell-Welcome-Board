@@ -12,7 +12,7 @@ description: Install, customize, verify, or troubleshoot the Clamshell Welcome B
 3. Show the user what files may change before running install or setup.
 4. Run ./install.sh.
 5. Run wb setup and answer with the user's chosen values.
-6. If the user gave custom commands, write a user-local custom command file using `LABEL|command|hint` rows and configure `WB_CUSTOM_COMMANDS_FILE`.
+6. If the user gave custom commands, write a user-local custom command file using `LABEL|command|hint` rows and configure `WB_CUSTOM_COMMANDS_FILE`. Use only short printable text; these rows are displayed, not executed.
 7. If the user gave service ports, configure `WB_SERVICE_PORTS` with `name:port` pairs.
 8. If the user uses Hermes, configure a label and preserve their command family, for example `m1 m1c m1s m1g m1up m1down m1re` and `m2 m2c m2s m2g m2up m2down m2re`.
 9. Run wb help, wb theme, and wb sections.

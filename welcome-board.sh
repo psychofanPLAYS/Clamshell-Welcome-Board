@@ -45,6 +45,9 @@ WB_PEERS|WB_PORT_BASELINE_FILE|WB_HERMES_LABEL|WB_AUTOMATION_MATCH|WB_AUTOMATION
   : "${WB_BANNER_TEXT:=CLAMSHELL}"
   : "${WB_THEME:=cyan-dark}"
   : "${WB_FRAME_INNER:=78}"
+  [[ "$WB_FRAME_INNER" =~ ^[0-9]+$ ]] || WB_FRAME_INNER=78
+  [ "$WB_FRAME_INNER" -ge 50 ] 2>/dev/null || WB_FRAME_INNER=78
+  [ "$WB_FRAME_INNER" -le 140 ] 2>/dev/null || WB_FRAME_INNER=78
   : "${WB_SERVICE_PORTS:=ssh:22 webdash:6900 embedder:6901 reranker:6902 honcho:6903 kenny-gate:6913 hermes:6916 cockpit:36900 qdrant:6333}"
   : "${WB_PORT_BASELINE_FILE:=$HOME/.local/state/welcome-board/ports-baseline.txt}"
   : "${WB_AUTOMATION_MATCH:=oppy superbrain kenny darkfactory trading codex claude hermes lcm curator reindex secondbrain news update-safe xtreme resource-recycler}"
@@ -64,6 +67,14 @@ __wb_paint() {
 
 # ---- platform ---------------------------------------------------------------
 __wb_os() { case "$(uname -s 2>/dev/null)" in Darwin) echo macos;; *) echo linux;; esac; }
+__wb_run_timeout() {
+  local seconds="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+  else
+    "$@"
+  fi
+}
 
 # ---- frame + row primitives -------------------------------------------------
 __wb_repeat() {
@@ -80,6 +91,19 @@ __wb_vis() {
   local s
   s=$(printf '%s' "$1" | sed $'s/\x1b\\[[0-9;]*m//g' | tr -d "$WB_DM")
   LC_ALL=C.UTF-8 printf '%s' "$s" | wc -m | awk '{print $1}'
+}
+__wb_safe_text() {
+  local s="${1-}"
+  s="${s//$'\r'/ }"
+  s="${s//$'\n'/ }"
+  s="${s//$'\t'/ }"
+  s="${s//$'\e'/}"
+  LC_ALL=C printf '%s' "$s" | tr -d '\000-\010\013\014\016-\037\177'
+}
+__wb_safe_token() {
+  local max="${2:-160}" s
+  s="$(__wb_safe_text "${1-}")"
+  printf '%s' "${s:0:max}"
 }
 # escape-aware clip: trims painted content to <= $2 VISIBLE columns, never cuts
 # mid-escape, appends a dim ellipsis. Overflow safety net so NO row breaks the frame.
@@ -104,7 +128,7 @@ __wb_plainrow() {
   c=${c//$WB_DM/$WB_D}; vis=$(__wb_vis "$c")
   if (( vis > zw-1 )); then c=$(__wb_clip "$c" $((zw-1))); vis=$(__wb_vis "$c"); fi
   pad=$(( zw - 1 - vis )); ((pad<0)) && pad=0
-  printf '  %s│%s %b%*s%s│%s\n' "$WB_AC" "$WB_R" "$c" "$pad" '' "$WB_AC" "$WB_R"
+  printf '  %s│%s %s%*s%s│%s\n' "$WB_AC" "$WB_R" "$c" "$pad" '' "$WB_AC" "$WB_R"
 }
 _WB_ZEB=0
 __wb_zreset() { _WB_ZEB=0; }
@@ -116,7 +140,7 @@ __wb_zrow() {                                         # $1 = WB_FR-reset content
   c=${c//$WB_DM/$dim}; c=${c//$WB_R/$WB_FR}; vis=$(__wb_vis "$c")
   if (( vis > zw-1 )); then c=$(__wb_clip "$c" $((zw-1))); vis=$(__wb_vis "$c"); fi
   pad=$(( zw - 1 - vis )); ((pad<0)) && pad=0
-  printf '  %s│%s %b%*s%s│%s\n' "$WB_AC" "$bg" "$c" "$pad" '' "$WB_AC" "$WB_R"
+  printf '  %s│%s %s%*s%s│%s\n' "$WB_AC" "$bg" "$c" "$pad" '' "$WB_AC" "$WB_R"
 }
 
 # ---- time-aware greeting (first name only, from config) ---------------------
@@ -133,7 +157,8 @@ __wb_banner_baked() {   # pre-baked ANSI-Shadow "CLAMSHELL" brand art (default /
 ART
 }
 __wb_banner_art() {   # echoes the banner art lines (no colour). Reused by the animation.
-  local txt="${WB_BANNER_TEXT:-CLAMSHELL}"
+  local txt
+  txt="$(__wb_safe_token "${WB_BANNER_TEXT:-CLAMSHELL}" 40)"
   if [ -z "$txt" ] || [ "$txt" = "CLAMSHELL" ]; then __wb_banner_baked; return; fi
   if command -v figlet >/dev/null 2>&1; then
     figlet -w 120 -- "$txt" 2>/dev/null | grep -v '^[[:space:]]*$'
@@ -146,7 +171,7 @@ __wb_banner_art() {   # echoes the banner art lines (no colour). Reused by the a
 # binary subtitle = the banner word as 8-bit ASCII (pure bash, bash-3.2 safe)
 __wb_banner_binary() {
   local txt b="" i j ch code byte
-  txt=$(printf '%s' "${WB_BANNER_TEXT:-clamshell}" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9'); : "${txt:=clamshell}"
+  txt=$(printf '%s' "$(__wb_safe_token "${WB_BANNER_TEXT:-clamshell}" 40)" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9'); : "${txt:=clamshell}"
   txt="${txt:0:12}"
   for ((i=0; i<${#txt}; i++)); do
     ch="${txt:i:1}"; printf -v code '%d' "'$ch"; byte=""
@@ -254,7 +279,9 @@ __wb_services() {
   __wb_hdr "SERVICES"
   local -a uplist=() downlist=(); local e n p nup=0 ntot=0
   for e in $WB_SERVICE_PORTS; do
-    n="${e%:*}"; p="${e##*:}"; ntot=$((ntot+1))
+    n="$(__wb_safe_token "${e%:*}" 32)"; p="${e##*:}"
+    [[ "$p" =~ ^[0-9]+$ ]] || continue
+    ntot=$((ntot+1))
     if echo "$WB_LISTEN" | grep -q ":$p "; then uplist+=("$n"); nup=$((nup+1)); else downlist+=("$n"); fi
   done
   __wb_zreset
@@ -280,23 +307,23 @@ __wb_automation() {
   __wb_hdr "AUTOMATION"
   __wb_zreset
   local have_timer=0
-  command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1 && have_timer=1
+  command -v systemctl >/dev/null 2>&1 && __wb_run_timeout 1 systemctl --user show-environment >/dev/null 2>&1 && have_timer=1
   local ntimers=0 ncron=0 nextlist=""
   if [ "$have_timer" = 1 ]; then
-    local tl; tl=$(systemctl --user list-timers --no-pager 2>/dev/null | grep -E '\.timer' | grep -vEi 'launchpadlib|man-db|fwupd|fstrim|logrotate')
+    local tl; tl=$(__wb_run_timeout 1 systemctl --user list-timers --no-pager 2>/dev/null | grep -E '\.timer' | grep -vEi 'launchpadlib|man-db|fwupd|fstrim|logrotate' || true)
     ntimers=$(printf '%s\n' "$tl" | grep -cE '\.timer')
     local u names=() pretty="" x
     while read -r u; do [ -n "$u" ] && names+=("${u%.timer}"); done \
       < <(printf '%s\n' "$tl" | awk '{for(i=1;i<=NF;i++) if($i ~ /\.timer$/){print $i; break}}' | head -3)
-    for x in "${names[@]}"; do pretty="$pretty${WB_DM}, ${WB_WHT}${x}"; done
+    for x in "${names[@]}"; do x="$(__wb_safe_token "$x" 80)"; pretty="$pretty${WB_DM}, ${WB_WHT}${x}"; done
     nextlist="${pretty#${WB_DM}, }"
   fi
-  ncron=$(crontab -l 2>/dev/null | grep -vcE '^\s*#|^\s*$')
+  ncron=$(__wb_run_timeout 1 crontab -l 2>/dev/null | grep -vcE '^\s*#|^\s*$' || true)
   if [ "$have_timer" = 1 ] || [ "${ncron:-0}" -gt 0 ]; then
-    local label=""; [ -n "${WB_AUTOMATION_LABEL:-}" ] && label=" ${WB_DM}— ${WB_AUTOMATION_LABEL}"
+    local label=""; [ -n "${WB_AUTOMATION_LABEL:-}" ] && label=" ${WB_DM}— $(__wb_safe_token "$WB_AUTOMATION_LABEL" 80)"
     __wb_zrow "${WB_LBL}$(printf '%-9s' 'jobs')${WB_FR}${WB_WHT}${ntimers}${WB_DM} loops · ${WB_WHT}${ncron}${WB_DM} cron${label}"
     [ -n "$nextlist" ] && __wb_zrow "${WB_LBL}$(printf '%-9s' 'next up')${WB_FR}${nextlist}"
-    [ -n "${WB_AUTOMATION_DAILY:-}" ] && __wb_zrow "${WB_LBL}$(printf '%-9s' 'daily')${WB_FR}${WB_DM}${WB_AUTOMATION_DAILY}"
+    [ -n "${WB_AUTOMATION_DAILY:-}" ] && __wb_zrow "${WB_LBL}$(printf '%-9s' 'daily')${WB_FR}${WB_DM}$(__wb_safe_token "$WB_AUTOMATION_DAILY" 120)"
   else
     __wb_zrow "${WB_DM}no user scheduler configured on this host"
   fi
@@ -372,7 +399,8 @@ __wb_animate_banner() {
 # ============================ render =========================================
 __wb_probe_listeners() {
   if [ "$(__wb_os)" = linux ] && command -v ss >/dev/null 2>&1; then
-    WB_LISTEN=$(ss -tlnH 2>/dev/null); WB_LISTENP=$(ss -tlnHp 2>/dev/null)
+    WB_LISTEN=$(__wb_run_timeout 1 ss -tlnH 2>/dev/null || true)
+    WB_LISTENP=$(__wb_run_timeout 1 ss -tlnHp 2>/dev/null || true)
   else WB_LISTEN=""; WB_LISTENP=""; fi
 }
 __wb_render() {
@@ -480,7 +508,8 @@ __wb_greeting() {   # echoes: HELLO<TAB>TAGLINE
   printf '%s\t%s' "${hi[RANDOM % ${#hi[@]}]}" "${msg[RANDOM % ${#msg[@]}]}"
 }
 __wb_greeting_row() {
-  local name="${WB_DISPLAY_NAME:-friend}" hi msg up
+  local name hi msg up
+  name="$(__wb_safe_token "${WB_DISPLAY_NAME:-friend}" 40)"
   IFS=$'\t' read -r hi msg < <(__wb_greeting)
   up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/ weeks\?/w/;s/,//g' || echo '?')
   __wb_plainrow ""
@@ -536,6 +565,7 @@ __wb_machine() {
   # CPU
   local cbrand cores ctemp cfcur cfmax cbusy
   cbrand=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | sed -E 's/.*: //; s/\(R\)//g; s/\(TM\)//g; s/Intel //; s/Core //; s/ CPU.*//; s/  */ /g; s/^ //'); : "${cbrand:=CPU}"
+  cbrand="$(__wb_safe_token "$cbrand" 80)"
   cores=$(nproc 2>/dev/null || echo '?')
   ctemp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1); [ -n "$ctemp" ] && ctemp=$((ctemp/1000))
   # live freq = fastest core right now (shows turbo under load; avg sits flat at base)
@@ -553,9 +583,10 @@ __wb_machine() {
   suGB=$(awk -v u="${su:-0}" 'BEGIN{printf "%.1f",u/1024}'); stGB=$(awk -v t="${stot:-0}" 'BEGIN{printf "%.0f",t/1024}')
   # GPU
   local gpu gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl vpct ppct gclk_pct mclk_pct v
-  gpu=$(nvidia-smi --query-gpu=name,pstate,utilization.gpu,temperature.gpu,memory.used,memory.total,clocks.gr,clocks.max.gr,clocks.mem,clocks.max.mem,power.draw,enforced.power.limit --format=csv,noheader,nounits 2>/dev/null | head -1)
+  gpu=$(__wb_run_timeout 2 nvidia-smi --query-gpu=name,pstate,utilization.gpu,temperature.gpu,memory.used,memory.total,clocks.gr,clocks.max.gr,clocks.mem,clocks.max.mem,power.draw,enforced.power.limit --format=csv,noheader,nounits 2>/dev/null | head -1)
   IFS=',' read -r gname gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl <<<"$gpu"
   gname=$(printf '%s' "$gname" | sed -E 's/^ *//; s/NVIDIA //; s/GeForce //'); : "${gname:=no GPU}"
+  gname="$(__wb_safe_token "$gname" 80)"
   for v in gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl; do printf -v "$v" '%s' "${!v// /}"; done
   [ -n "$vt" ] && [ "$vt" -gt 0 ] 2>/dev/null && vpct=$(( ${vu:-0}*100/vt )) || vpct=0
   gpw=${gpw%.*}; gpl=${gpl%.*}
@@ -597,6 +628,7 @@ __wb_machine_macos() {
   __wb_hdr "MACHINE"; __wb_zreset
   local cbrand cores mtot_b ctot psize mu_pages mu rpct btot bused dt du dp l1 l5 l15 lpct up
   cbrand=$(sysctl -n machdep.cpu.brand_string 2>/dev/null | sed -E 's/ +\(.*\)$//; s/  */ /g'); : "${cbrand:=Apple Silicon}"
+  cbrand="$(__wb_safe_token "$cbrand" 80)"
   cores=$(sysctl -n hw.logicalcpu 2>/dev/null || echo '?')
   mtot_b=$(sysctl -n hw.memsize 2>/dev/null); ctot=$(( ${mtot_b:-0}/1073741824 ))
   psize=$(vm_stat 2>/dev/null | awk -F'of ' '/page size/{gsub(/[^0-9]/,"",$2);print $2;exit}'); : "${psize:=4096}"
@@ -631,14 +663,16 @@ __wb_network() {
   __wb_hdr "NETWORK"; __wb_zreset
   local nif nrx ntx npct
   read -r nif nrx ntx < <(__wb_netrate)
+  nif="$(__wb_safe_token "${nif:-—}" 40)"
   npct=$(awk -v r="${nrx:-0}" -v t="${ntx:-0}" 'BEGIN{m=(r>t)?r:t;p=m/12500*100;p=(p>100)?100:p;printf "%d",p}')
   __wb_mrow "RATE" "${npct}" "$(__wb_hist_graph net "${npct}")" "${WB_DEV}${nif:-—}  ${WB_DM}down ${WB_WHT}${nrx:-0}${WB_DM} · up ${WB_WHT}${ntx:-0}${WB_DM} KB/s"
   local ts self peer nm match probe ip st
-  ts=$(timeout 1 tailscale status 2>/dev/null)
-  self=$(hostname 2>/dev/null | cut -d. -f1)
+  ts=$(__wb_run_timeout 1 tailscale status 2>/dev/null || true)
+  self="$(__wb_safe_token "$(hostname 2>/dev/null | cut -d. -f1)" 32)"
   if [ -n "$self" ]; then
     ip=$(echo "$ts" | awk -v h="$self" '$0 ~ h {print $1; exit}'); : "${ip:=$(hostname -I 2>/dev/null | awk '{print $1}')}"
-    __wb_zrow "${WB_LBL}$(printf '%-6s' "${self:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "${ip:-?}")${WB_DM}· this machine"
+    ip="$(__wb_safe_token "${ip:-?}" 64)"
+    __wb_zrow "${WB_LBL}$(printf '%-6s' "${self:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "$ip")${WB_DM}· this machine"
   fi
   local IFS_SAVE="$IFS"
   for peer in ${WB_PEERS:-}; do
@@ -646,18 +680,24 @@ __wb_network() {
     ip=$(echo "$ts" | awk -v m="$match" '$0 ~ m {print $1; exit}')
     local phost="${probe%:*}" pport="${probe##*:}"
     if [ -n "$probe" ] && [[ "$phost" =~ ^[A-Za-z0-9._-]+$ ]] && [[ "$pport" =~ ^[0-9]+$ ]] \
-       && timeout 0.8 bash -c "exec 3<>/dev/tcp/${phost}/${pport}" 2>/dev/null; then
+       && [ "$pport" -ge 1 ] 2>/dev/null && [ "$pport" -le 65535 ] 2>/dev/null \
+       && __wb_run_timeout 0.8 bash -c 'exec 3<>"/dev/tcp/$1/$2"' bash "$phost" "$pport" 2>/dev/null; then
       st="${WB_GRN}● serving ${WB_DM}:${pport}"
     elif echo "$ts" | grep -qi "$match.*active"; then st="${WB_GRN}● online"
     else st="${WB_DM}○ offline"; fi
-    __wb_zrow "${WB_LBL}$(printf '%-6s' "${nm:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "${ip:-—}")${WB_FR}${st}"
+    local shown_nm shown_ip
+    shown_nm="$(__wb_safe_token "$nm" 32)"
+    shown_ip="$(__wb_safe_token "${ip:-—}" 64)"
+    __wb_zrow "${WB_LBL}$(printf '%-6s' "${shown_nm:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "$shown_ip")${WB_FR}${st}"
   done
   IFS="$IFS_SAVE"
-  local nssh sc ntmux tnames
+  local nssh sc ntmux tnames tmux_list
   nssh=$(who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)'); : "${nssh:=0}"
   sc=$WB_WHT; [ "${nssh:-0}" -ge 4 ] 2>/dev/null && sc=$WB_YEL
-  ntmux=$(tmux ls 2>/dev/null | wc -l | tr -d ' '); : "${ntmux:=0}"
-  tnames=$(tmux ls 2>/dev/null | sed 's/:.*//' | paste -sd, - | sed 's/,/, /g')
+  tmux_list="$(__wb_run_timeout 1 tmux ls 2>/dev/null || true)"
+  ntmux=$(printf '%s\n' "$tmux_list" | sed '/^$/d' | wc -l | tr -d ' '); : "${ntmux:=0}"
+  tnames=$(printf '%s\n' "$tmux_list" | sed 's/:.*//' | paste -sd, - | sed 's/,/, /g')
+  tnames="$(__wb_safe_token "$tnames" 180)"
   __wb_zrow "${WB_LBL}$(printf '%-6s' 'ssh')${WB_FR} ${sc}${nssh}${WB_FR} ${WB_DM}remote login(s) · clear ghosts → ${WB_CYN}ssh-reap"
   if [ "${ntmux:-0}" -gt 0 ]; then
     __wb_zrow "${WB_LBL}$(printf '%-6s' 'tmux')${WB_FR} ${WB_WHT}${ntmux}${WB_FR} ${WB_DM}session(s): ${tnames}"
@@ -679,17 +719,25 @@ __wb_hermes() {
 #  Personal shortcuts (ssh hosts, secrets, lid, etc.) live in
 #  ${WB_CUSTOM_COMMANDS_FILE:-~/.config/welcome-board/commands} as 'label|command|hint'
 #  rows — so the SHIPPED default stays generic and nobody's machine names leak.
-__wb_cmdrow() { __wb_zrow "${WB_PNK}${WB_B}$(printf '%-9s' "$1")${WB_FR} ${2}"; }
+__wb_cmdrow() {
+  local label
+  label="$(__wb_safe_token "$1" 32)"
+  __wb_zrow "${WB_PNK}${WB_B}$(printf '%-9s' "$label")${WB_FR} ${2}"
+}
 __wb_commands() {
   __wb_hdr "COMMANDS"; __wb_zreset
   __wb_cmdrow "update"  "${WB_CYN}update-all${WB_FR} ${WB_D}system + AI CLIs${WB_FR}   ${WB_CYN}restart${WB_FR} ${WB_D}reload shell"
   __wb_cmdrow "board"   "${WB_CYN}clamboard${WB_FR} ${WB_D}reprint${WB_FR}   ${WB_CYN}wb setup${WB_FR} ${WB_D}customize${WB_FR}   ${WB_CYN}clamhelp${WB_FR} ${WB_D}all commands"
   __wb_cmdrow "tmux"    "${WB_CYN}tmux${WB_FR} ${WB_D}list${WB_FR}  ${WB_CYN}tmux 2${WB_FR} ${WB_D}join${WB_FR}  ${WB_CYN}tmux new -s work${WB_FR}  ${WB_CYN}kill 1 2${WB_FR}  ${WB_D}detach ${WB_CYN}C-b d"
   __wb_cmdrow "network" "${WB_CYN}ssh-sessions${WB_FR} ${WB_D}who's on${WB_FR}  ${WB_CYN}ssh-reap${WB_FR} ${WB_D}kill ghosts${WB_FR}  ${WB_CYN}wb ports explain"
-  local ccf="${WB_CUSTOM_COMMANDS_FILE:-$HOME/.config/welcome-board/commands}" cl cc ch
-  if [ -r "$ccf" ]; then
+  local ccf="${WB_CUSTOM_COMMANDS_FILE:-$HOME/.config/welcome-board/commands}" cl cc ch n=0
+  if [ -r "$ccf" ] && [ "$(wc -c < "$ccf" 2>/dev/null || echo 0)" -le 16384 ]; then
     while IFS='|' read -r cl cc ch || [ -n "$cl" ]; do
+      n=$((n+1)); [ "$n" -le 20 ] || break
       [ -z "$cl" ] && continue; case "$cl" in \#*) continue;; esac
+      cl="$(__wb_safe_token "$cl" 32)"
+      cc="$(__wb_safe_token "$cc" 100)"
+      ch="$(__wb_safe_token "$ch" 100)"
       __wb_cmdrow "${cl:0:9}" "${WB_CYN}${cc}${WB_FR}${ch:+   ${WB_D}${ch}}"
     done < "$ccf"
   fi

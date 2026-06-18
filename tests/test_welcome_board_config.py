@@ -172,6 +172,20 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertIn("Alex", rendered)
         self.assertNotIn("shim dash", rendered)
 
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            unsafe_rendered = render_with_config(
+                Path(raw_tmp),
+                "\n".join([
+                    'WB_DISPLAY_NAME="Alex\x1b]52;c;boom\x07"',
+                    'WB_BANNER_TEXT="WORKSTATION"',
+                    "",
+                ]),
+            )
+
+        self.assertIn("Alex", unsafe_rendered)
+        self.assertNotIn("\x1b]52", unsafe_rendered)
+        self.assertNotIn("\x07", unsafe_rendered)
+
     def test_new_section_headers_all_present_with_config(self) -> None:
         """Full render with a custom config still shows all 7 new section headers."""
         with tempfile.TemporaryDirectory() as raw_tmp:
