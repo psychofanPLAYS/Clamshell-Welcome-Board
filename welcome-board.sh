@@ -72,11 +72,12 @@ __wb_repeat() {
 }
 __wb_frame_top()    { printf '  %s┌%s┐%s\n' "$WB_AC" "$(__wb_repeat '─' "$WB_FRAME_INNER")" "$WB_R"; }
 __wb_frame_bottom() { printf '  %s└%s┘%s\n' "$WB_AC" "$(__wb_repeat '─' "$WB_FRAME_INNER")" "$WB_R"; }
-__wb_hdr() {
+__wb_hdr() {                                          # blank line above + YELLOW bold title on a subtle divider
   local lbl="$1" rule
   rule=$(( WB_FRAME_INNER - ${#lbl} - 3 )); ((rule < 4)) && rule=4
+  __wb_plainrow ""
   printf '  %s├%s─ %s%s%s %s%s┤%s\n' \
-    "$WB_AC" "$WB_HDR" "$WB_B" "$lbl" "$WB_R$WB_HDR$WB_D" \
+    "$WB_AC" "$WB_D" "$WB_YEL$WB_B" "$lbl" "$WB_R$WB_D" \
     "$(__wb_repeat '─' "$rule")" "$WB_AC" "$WB_R"
 }
 __wb_lbl() { printf '%s%-11s%s' "$WB_GRY" "$1" "$WB_R"; }
@@ -179,11 +180,17 @@ __wb_banner() {
   local binary; binary=$(__wb_banner_binary)
   local -a art=(); local __l; while IFS= read -r __l; do art+=("$__l"); done < <(__wb_banner_art)
   local -a g=($'\e[38;5;45m' $'\e[38;5;81m' $'\e[38;5;75m' $'\e[38;5;39m' $'\e[38;5;33m' $'\e[38;5;69m')
-  local i line max_art=0 pad art_pad=""
-  for line in "${art[@]}"; do ((${#line} > max_art)) && max_art=${#line}; done
-  pad=$(( (2 + ${#binary} - max_art) / 2 )); ((pad > 0)) && printf -v art_pad '%*s' "$pad" ''
-  for i in "${!art[@]}"; do printf '%s%s%s%s\n' "${g[i]}" "$art_pad" "${art[i]}" "$WB_R"; done
-  printf '  %s%s%s\n' "$WB_HDR" "$binary" "$WB_R"
+  local i line lead minlead=99 max_art=0 fw=$(( WB_FRAME_INNER + 2 )) pad bpad
+  # normalize: strip the common leading whitespace so the art block is flush-left
+  for line in "${art[@]}"; do lead="${line%%[![:space:]]*}"; (( ${#lead} < minlead )) && minlead=${#lead}; done
+  (( minlead == 99 )) && minlead=0
+  for i in "${!art[@]}"; do art[i]="${art[i]:minlead}"; (( ${#art[i]} > max_art )) && max_art=${#art[i]}; done
+  # center the banner block within the frame box (cols 2..81 = 2-space indent + 80-col box)
+  pad=$(( 2 + (fw - max_art) / 2 )); ((pad < 0)) && pad=0
+  for i in "${!art[@]}"; do printf '%*s%s%s%s\n' "$pad" '' "${g[i]}" "${art[i]}" "$WB_R"; done
+  # center the binary subtitle the same way
+  bpad=$(( 2 + (fw - ${#binary}) / 2 )); ((bpad < 0)) && bpad=0
+  printf '%*s%s%s%s\n' "$bpad" '' "$WB_HDR" "$binary" "$WB_R"
 }
 __wb_greeting_row() {
   __wb_plainrow ""
@@ -327,11 +334,11 @@ __wb_network() {
   sc=$WB_WHT; [ "${nssh:-0}" -ge 4 ] 2>/dev/null && sc=$WB_YEL
   ntmux=$(tmux ls 2>/dev/null | wc -l | tr -d ' '); : "${ntmux:=0}"
   tnames=$(tmux ls 2>/dev/null | sed 's/:.*//' | paste -sd, - | sed 's/,/, /g')
-  __wb_zrow "${WB_LBL}$(printf '%-10s' 'ssh')${WB_FR}${sc}${nssh} remote${WB_FR} ${WB_DM}login(s) · ghosts? → ${WB_CYN}ssh-reap"
+  __wb_zrow "${WB_LBL}$(printf '%-11s' 'ssh')${WB_FR}${sc}${nssh} remote${WB_FR} ${WB_DM}login(s) · ghosts? → ${WB_CYN}ssh-reap"
   if [ "${ntmux:-0}" -gt 0 ]; then
-    __wb_zrow "${WB_LBL}$(printf '%-10s' 'tmux')${WB_FR}${WB_WHT}${ntmux} session(s)${WB_FR} ${WB_DM}${tnames}"
+    __wb_zrow "${WB_LBL}$(printf '%-11s' 'tmux')${WB_FR}${WB_WHT}${ntmux} session(s)${WB_FR} ${WB_DM}${tnames}"
   else
-    __wb_zrow "${WB_LBL}$(printf '%-10s' 'tmux')${WB_FR}${WB_DM}no sessions · start: ${WB_CYN}tmux new -s work"
+    __wb_zrow "${WB_LBL}$(printf '%-11s' 'tmux')${WB_FR}${WB_DM}no sessions · start: ${WB_CYN}tmux new -s work"
   fi
 }
 
@@ -372,23 +379,13 @@ __wb_security() {
     elif [[ "$expected" == *" $port "* ]]; then lan="$lan $port"
     else alert="$alert $port"; fi
   done < <(echo "$WB_LISTENP")
-  local base_note="" cur_set; cur_set=$(echo "$lan $alert" | tr ' ' '\n' | sort -nu | paste -sd' ' -)
-  if [ -r "$WB_PORT_BASELINE_FILE" ]; then
-    local saved; saved=$(cat "$WB_PORT_BASELINE_FILE" 2>/dev/null)
-    [ "$(echo "$saved" | tr ' ' '\n' | sort -nu | paste -sd' ' -)" = "$cur_set" ] \
-      && base_note="${WB_GRN}● matches baseline" || base_note="${WB_YEL}▲ drifted${WB_DM} (review: ${WB_CYN}wb ports explain${WB_DM})"
-  else
-    base_note="${WB_DM}none yet · set: ${WB_CYN}wb ports snapshot"
-  fi
   if [ -n "$alert" ]; then
     __wb_zrow "${WB_RED}${WB_B}▲ Unrecognized door:${WB_FR} ${WB_RED}$(__wb_group "$alert" "$WB_RED")${WB_DM} — investigate"
-    __wb_zrow "${WB_DM}known LAN doors: ${WB_WHT}$(__wb_group "$lan" "$WB_WHT")"
   else
     __wb_zrow "${WB_GRN}${WB_B}✓ Locked.${WB_FR} ${WB_DM}LAN doors ok: ${WB_WHT}$(__wb_group "$lan" "$WB_WHT")"
     __wb_zrow "${WB_DM}rest is loopback (this PC) or Tailscale VPN only — no strangers."
   fi
-  __wb_zrow "${WB_DM}baseline: ${base_note}"
-  [ -n "$rygel_ports" ] && __wb_zrow "${WB_DM}known dynamic service: ${WB_WHT}media server${WB_DM} on ${WB_WHT}${rygel_ports# }"
+  [ -n "$rygel_ports" ] && __wb_zrow "${WB_DM}known service: ${WB_WHT}media server${WB_DM} on ${WB_WHT}${rygel_ports# }"
 }
 
 # ---- SERVICES (config-driven; webdash label; real listener check) -----------
@@ -478,12 +475,14 @@ __wb_cmdrow() { __wb_zrow "${WB_PNK}${WB_B}$(printf '%-8s' "$1")${WB_FR} ${2}"; 
 __wb_commands() {
   __wb_hdr "COMMANDS"
   __wb_zreset
-  __wb_cmdrow "BOARD"  "${WB_CYN}clamboard${WB_FR} ${WB_D}reprint${WB_FR}   ${WB_CYN}clamboard --animate${WB_FR} ${WB_D}slam-in${WB_FR}   ${WB_CYN}clamhelp${WB_FR} ${WB_D}full ref"
-  __wb_cmdrow "TMUX"   "${WB_D}new:${WB_FR} ${WB_CYN}tmux new -s work${WB_FR}   ${WB_D}join:${WB_FR} ${WB_CYN}tmux attach -t work${WB_FR}   ${WB_D}detach:${WB_FR} ${WB_CYN}Ctrl-b d"
-  __wb_cmdrow ""       "${WB_D}list:${WB_FR} ${WB_CYN}tmux ls${WB_FR}   ${WB_D}kill:${WB_FR} ${WB_CYN}tmux kill-session -t work"
   __wb_cmdrow "UPDATE" "${WB_CYN}update-all${WB_FR} ${WB_D}apt/brew/snap/node/npm/uv/pipx/gh + claude/codex"
+  __wb_cmdrow "HELP"   "${WB_CYN}clamhelp${WB_FR} ${WB_D}full reference${WB_FR}   ${WB_CYN}restart${WB_FR} ${WB_D}reload shell${WB_FR}   ${WB_CYN}ssh mac"
+  __wb_cmdrow "INSTALL" "${WB_D}codex/claude:${WB_FR} ${WB_CYN}npm i -g @openai/codex${WB_FR} ${WB_D}·${WB_FR} ${WB_CYN}@anthropic-ai/claude-code"
+  __wb_cmdrow "TMUX"   "${WB_CYN}tmux${WB_FR} ${WB_D}list${WB_FR}   ${WB_CYN}tmux 2${WB_FR} ${WB_D}join #2${WB_FR}   ${WB_CYN}tmux new -s work${WB_FR}   ${WB_D}detach ${WB_CYN}Ctrl-b d"
+  __wb_cmdrow ""       "${WB_CYN}tmux kill 1 2${WB_FR} ${WB_D}kill #1 #2${WB_FR}   ${WB_CYN}tmux rename 3 work${WB_FR} ${WB_D}rename #3"
+  __wb_cmdrow "LID"    "${WB_CYN}lid-status${WB_FR}   ${WB_CYN}lid-on-clamshell${WB_FR} ${WB_D}stay awake${WB_FR}   ${WB_CYN}lid-off-clamshell"
   __wb_cmdrow "SSH"    "${WB_CYN}ssh-sessions${WB_FR} ${WB_D}who's on${WB_FR}   ${WB_CYN}ssh-reap${WB_FR} ${WB_D}kill ghosts (keeps this + tmux)"
-  __wb_cmdrow "SECRET" "${WB_CYN}secret get NAME${WB_FR}   ${WB_CYN}secret list${WB_FR}   ${WB_D}(never printed to logs)"
+  __wb_cmdrow "SECRET" "${WB_CYN}vault${WB_FR} ${WB_D}edit${WB_FR}   ${WB_CYN}secret get NAME${WB_FR}   ${WB_CYN}secret list${WB_FR}   ${WB_D}never logged"
 }
 
 # ---- FOOTER (update notice — below the board so it never confuses hierarchy) -
