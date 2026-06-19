@@ -48,6 +48,6 @@ jobs:
           import os, pathlib, re
           text = pathlib.Path(os.environ["RENDER_PATH"]).read_text(errors="ignore")
           clean = re.sub(r"\x1B\[[0-9;]*m", "", text).replace("\x06", "")
-for token in ("MACHINE", "NETWORK", "SECURITY", "HERMES", "COMMANDS"):
+          for token in ("MACHINE", "NETWORK", "SECURITY", "HERMES", "COMMANDS"):
               assert token in clean, token
           PY
