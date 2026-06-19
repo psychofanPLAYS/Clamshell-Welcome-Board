@@ -18,7 +18,7 @@ class PublicArtifactsTests(unittest.TestCase):
 
         demo = demo_path.read_text(encoding="utf-8")
         for expected in ("MACHINE", "NETWORK", "SECURITY", "SERVICES",
-                         "AUTOMATION", "HERMES", "COMMANDS", "CPU", "TMUX"):
+                         "AUTOMATION", "HERMES", "COMMANDS", "CPU", "tmux"):
             self.assertIn(expected, demo)
         for stale_heading in ("PRESSURE", "CLOCKS", "MEMORY / DISK", "YOU ARE ON"):
             self.assertNotIn(stale_heading, demo)

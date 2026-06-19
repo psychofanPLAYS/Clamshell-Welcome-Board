@@ -553,9 +553,28 @@ __wb_netrate() {   # echoes: iface rxKBs txKBs  (sum non-loopback over a 0.1s de
 }
 
 # --- load row routes through __wb_mrow so it matches each variant's style ----
+__wb_center() {
+  local width="$1" text="$2" len left right
+  len=${#text}
+  ((len >= width)) && { printf '%s' "$text"; return; }
+  left=$(( (width - len) / 2 ))
+  right=$(( width - len - left ))
+  printf '%*s%s%*s' "$left" "" "$text" "$right" ""
+}
+
 __wb_loadrow() {
-  local pct="$1" l1="$2" l5="$3" l15="$4" up="$5" graph="$6"
-  __wb_mrow "LOAD" "$pct" "$graph" "${WB_WHT}${l1} ${WB_DM}· ${WB_WHT}${l5} ${WB_DM}· ${WB_WHT}${l15}${WB_DM}  (1m·5m·15m) · up ${up}"
+  local pct="$1" l1="$2" l5="$3" l15="$4" _up="${5:-}" graph="${6:-}"
+  local f1 f5 f15 k1 k5 k15 prefix
+  printf -v f1 '%5s' "$l1"
+  printf -v f5 '%5s' "$l5"
+  printf -v f15 '%5s' "$l15"
+  k1="$(__wb_center 5 "1m")"
+  k5="$(__wb_center 5 "5m")"
+  k15="$(__wb_center 5 "15m")"
+  printf -v prefix '%31s' ''
+
+  __wb_mrow "LOAD" "$pct" "$graph" "${WB_WHT}${f1} ${WB_DM}· ${WB_WHT}${f5} ${WB_DM}· ${WB_WHT}${f15}"
+  __wb_zrow "${prefix}${WB_DM}${k1}   ${k5}   ${k15}"
 }
 
 # --- MACHINE: five segregated groups, real probes, history graphs -----------

@@ -94,6 +94,10 @@ class MachineSectionTests(unittest.TestCase):
         self.assertIsNotNone(legend_line, "Load legend (1m/15m) not found")
         # Legend must contain the three period labels
         self.assertIn("5m", legend_line)
+        self.assertNotIn("up 1d", load_line)
+        self.assertEqual(load_line.index("1.25"), legend_line.index("1m"))
+        self.assertEqual(load_line.index("1.07"), legend_line.index("5m"))
+        self.assertEqual(load_line.index("1.05"), legend_line.index("15m"))
 
     def test_machine_rows_have_gauge_bars_and_correct_rows(self) -> None:
         """Linux MACHINE: segregated CPU/RAM/GPU/DISK groups; each metric row has an 8-cell bar."""
@@ -109,7 +113,7 @@ class MachineSectionTests(unittest.TestCase):
         for group in ("CPU", "RAM", "GPU", "DISK"):
             self.assertIn(group, rendered)
 
-        # Inline load legend present (no separate misaligned legend line anymore).
+        # Load legend is on its own aligned row below the three readings.
         self.assertIn("1m", rendered)
         self.assertIn("15m", rendered)
 
