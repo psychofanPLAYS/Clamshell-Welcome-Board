@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+import subprocess
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,31 @@ class PublicArtifactsTests(unittest.TestCase):
         )
         for forbidden in forbidden_values:
             self.assertNotIn(forbidden.lower(), demo.lower())
+
+    def test_screenshot_redactor_only_touches_network_ips(self) -> None:
+        sample = (
+            "├─ MACHINE ─\n"
+            "│ host 198.51.100.44 stays for non-network tests │\n"
+            "├─ NETWORK ─\n"
+            "│ self 203.0.113.10 · this machine │\n"
+            "│ peer fd7a:115c:a1e0::1 online │\n"
+            "├─ SECURITY ─\n"
+            "│ port 127.0.0.1 is not in network anymore │\n"
+        )
+        proc = subprocess.run(
+            ["python3", "tools/redact-network-ips.py"],
+            input=sample,
+            text=True,
+            cwd=REPO_ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+        )
+        redacted = proc.stdout
+        self.assertIn("198.51.100.44", redacted)
+        self.assertIn("127.0.0.1", redacted)
+        self.assertNotIn("203.0.113.10", redacted)
+        self.assertNotIn("fd7a:115c:a1e0::1", redacted)
+        self.assertIn("xxxxxxxxxxxx", redacted)
 
 
 if __name__ == "__main__":

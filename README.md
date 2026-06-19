@@ -4,11 +4,9 @@
 
 A fast, beautiful, **single-screen operator board** that prints when you open a terminal — machine pressure, network peers, security drift, services, scheduled automation, and your command cheat-sheet, in one perfectly-aligned frame. Linux **and** macOS. Pure Bash, no daemons, no dependencies beyond what your shell already has.
 
-![Welcome board — slam-in animation](docs/screenshots/welcome-board.gif)
-
-> Login is **instant and static** (never blocks your prompt). The slam-in animation above is the optional showpiece: `clamboard --animate`.
-
 ![Welcome board — full render](docs/screenshots/welcome-board.png)
+
+> Public screenshot note: Network IP addresses are redacted in the image above. Your local board shows your real values.
 
 A public-safe text preview lives in [docs/demo-output.txt](docs/demo-output.txt).
 
@@ -103,6 +101,8 @@ wb ports snapshot      # save the reviewed baseline SECURITY warns against
 ---
 
 ## The animation
+
+![Welcome board — slam-in animation](docs/screenshots/welcome-board.gif)
 
 `clamboard --animate` (or `WB_ANIMATE=1` at login) slides the banner in from behind the right edge, slams it home, then decodes the binary subtitle left-to-right. It is **synchronous and fast (~0.4s)** and finishes before your prompt returns. The default login render is deliberately static and instant so it never fights your typing or slows a new shell. Regenerate the README GIF with [tools/demo.tape](tools/demo.tape) (via [vhs](https://github.com/charmbracelet/vhs)).
 
