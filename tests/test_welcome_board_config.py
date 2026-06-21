@@ -186,6 +186,78 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertNotIn("\x1b]52", unsafe_rendered)
         self.assertNotIn("\x07", unsafe_rendered)
 
+    def test_clamshell_banner_uses_built_in_block_art(self) -> None:
+        """The public CLAMSHELL demo must keep the hand-tuned banner style."""
+        env = os.environ.copy()
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f"source {SCRIPT}; WB_BANNER_TEXT=CLAMSHELL; __wb_banner_art",
+            ],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        self.assertIn("██████╗██╗", result.stdout)
+        self.assertIn("╚═════╝", result.stdout)
+
+    def test_configured_theme_changes_palette(self) -> None:
+        proc = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f"source {SCRIPT}; WB_THEME=cyan-dark; __wb_paint; printf '%s\\n' \"$WB_AC\"; __wb_banner_color_lines | head -1; WB_THEME=amber-terminal; __wb_paint; printf '%s\\n' \"$WB_AC\"; __wb_banner_color_lines | head -1",
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        cyan_ac, cyan_banner, amber_ac, amber_banner = proc.stdout.splitlines()
+        self.assertNotEqual(cyan_ac, amber_ac)
+        self.assertNotEqual(cyan_banner, amber_banner)
+        self.assertIn("\x1b[38;5;81m", cyan_ac)
+        self.assertIn("\x1b[38;5;45m", cyan_banner)
+        self.assertIn("\x1b[38;5;214m", amber_ac)
+        self.assertIn("\x1b[38;5;220m", amber_banner)
+
+    def test_config_loads_animation_timing_overrides(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            home = Path(raw_tmp)
+            config = home / ".config" / "welcome-board" / "config"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "\n".join([
+                    "WB_ANIMATION_CHUNKS=5",
+                    "WB_ANIMATION_LAUNCH_STEP=3",
+                    "WB_ANIMATION_SLIDE_FRAMES=8",
+                    "WB_ANIMATION_FRAME_DELAY_MS=9",
+                    "WB_ANIMATION_BINARY_DELAY=0.001",
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+
+            env = os.environ.copy()
+            env["HOME"] = str(home)
+            env["WELCOME_BOARD_CONFIG"] = str(config)
+            proc = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    f"source {SCRIPT}; __wb_load_config; printf '%s %s %s %s %s\\n' \"$WB_ANIMATION_CHUNKS\" \"$WB_ANIMATION_LAUNCH_STEP\" \"$WB_ANIMATION_SLIDE_FRAMES\" \"$WB_ANIMATION_FRAME_DELAY_MS\" \"$WB_ANIMATION_BINARY_DELAY\"",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+        self.assertEqual(proc.stdout.strip(), "5 3 8 9 0.001")
+
     def test_new_section_headers_all_present_with_config(self) -> None:
         """Full render with a custom config still shows all 7 new section headers."""
         with tempfile.TemporaryDirectory() as raw_tmp:

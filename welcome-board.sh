@@ -5,8 +5,8 @@
 #  Works on Linux + macOS. FAST + failure-tolerant: local checks only, every
 #  field wrapped 2>/dev/null with a fallback. The board NEVER errors out and
 #  NEVER blocks the prompt — a failed probe shows as "—", never a crash.
-#  Self-contained; also runs via `clamboard` / `wb render`. Defines the
-#  clamboard / clamhelp / hkeys user commands.
+#  Self-contained; also runs via `wb render` / `welcomeboard`. Defines the
+#  welcomeBoard / welcomeHelp / hkeys user commands when sourced.
 #
 #  Design rules (dark mode, 13" hi-dpi, dyslexia/ADHD, glance-first):
 #   - few rows, aligned columns, ONE crisp outer frame, gold titles on dividers
@@ -28,6 +28,13 @@ __wb_config_value() {
   fi
   printf '%s' "$raw"
 }
+__wb_default_banner_text() {
+  local host
+  host="$(hostname -s 2>/dev/null || printf WORKSTATION)"
+  host="${host%%.*}"
+  host="${host:-WORKSTATION}"
+  printf '%s' "$host"
+}
 __wb_load_config() {
   [ "${_WB_CONFIG_LOADED:-0}" = 1 ] && return 0
   _WB_CONFIG_LOADED=1
@@ -36,13 +43,15 @@ __wb_load_config() {
     while IFS='=' read -r key raw || [ -n "$key" ]; do
       case "$key" in
         WB_DISPLAY_NAME|WB_BANNER_TEXT|WB_THEME|WB_SERVICE_PORTS|WB_EXPECTED_PORTS|\
-WB_PEERS|WB_PORT_BASELINE_FILE|WB_HERMES_LABEL|WB_AUTOMATION_MATCH|WB_AUTOMATION_LABEL|WB_AUTOMATION_DAILY|WB_FRAME_INNER)
+WB_PEERS|WB_PORT_BASELINE_FILE|WB_HERMES_LABEL|WB_AUTOMATION_MATCH|WB_AUTOMATION_LABEL|WB_AUTOMATION_DAILY|WB_FRAME_INNER|\
+WB_TAILSCALE_TIMEOUT|WB_PEER_PROBE_TIMEOUT|WB_NETWORK_COMMAND_TIMEOUT|WB_NETRATE_DELAY|WB_ANIMATION_CHUNKS|\
+WB_ANIMATION_LAUNCH_STEP|WB_ANIMATION_SLIDE_FRAMES|WB_ANIMATION_FRAME_DELAY_MS|WB_ANIMATION_BINARY_DELAY)
           value="$(__wb_config_value "$raw")"; printf -v "$key" '%s' "$value" ;;
       esac
     done < "$cfg"
   fi
   : "${WB_DISPLAY_NAME:=${USER:-friend}}"
-  : "${WB_BANNER_TEXT:=CLAMSHELL}"
+  : "${WB_BANNER_TEXT:=$(__wb_default_banner_text)}"
   : "${WB_THEME:=cyan-dark}"
   : "${WB_FRAME_INNER:=78}"
   [[ "$WB_FRAME_INNER" =~ ^[0-9]+$ ]] || WB_FRAME_INNER=78
@@ -53,27 +62,184 @@ WB_PEERS|WB_PORT_BASELINE_FILE|WB_HERMES_LABEL|WB_AUTOMATION_MATCH|WB_AUTOMATION
   : "${WB_AUTOMATION_MATCH:=oppy superbrain kenny darkfactory trading codex claude hermes lcm curator reindex secondbrain news update-safe xtreme resource-recycler}"
 }
 
-# ---- palette (256-colour, tuned for dark terminals) -------------------------
+# ---- palette (256-colour, tuned per theme) ----------------------------------
 __wb_paint() {
-  WB_R=$'\e[0m'; WB_B=$'\e[1m'; WB_D=$'\e[38;5;245m'
-  WB_GRN=$'\e[38;5;78m'; WB_RED=$'\e[38;5;203m'; WB_YEL=$'\e[38;5;221m'
-  WB_CYN=$'\e[38;5;81m'; WB_PNK=$'\e[38;5;211m'; WB_GRY=$'\e[38;5;250m'
-  WB_WHT=$'\e[38;5;253m'; WB_HDR=$'\e[38;5;117m'; WB_AC=$'\e[38;5;81m'
-  WB_LBL=$'\e[1m\e[38;5;111m'   # bold cornflower — name column
-  WB_DEV=$'\e[38;5;180m'        # warm tan — device-name column
-  WB_FR=$'\e[22;24;39m'         # fg-only reset: keeps the row's zebra bg
+  WB_R=$'\e[0m'; WB_B=$'\e[1m'; WB_FR=$'\e[22;24;39m'
+  WB_GRN=$'\e[38;5;78m'; WB_RED=$'\e[38;5;203m'
+  case "${WB_THEME:-cyan-dark}" in
+    amber-terminal)
+      WB_D=$'\e[38;5;244m'; WB_YEL=$'\e[38;5;220m'; WB_CYN=$'\e[38;5;214m'
+      WB_PNK=$'\e[38;5;209m'; WB_GRY=$'\e[38;5;250m'; WB_WHT=$'\e[38;5;254m'
+      WB_HDR=$'\e[38;5;222m'; WB_AC=$'\e[38;5;214m'; WB_LBL=$'\e[1m\e[38;5;222m'
+      WB_DEV=$'\e[38;5;180m'; WB_GOLD=$'\e[1m\e[38;5;220m'; WB_NEON_ORANGE=$'\e[1m\e[38;5;208m'
+      ;;
+    green-phosphor)
+      WB_D=$'\e[38;5;242m'; WB_YEL=$'\e[38;5;190m'; WB_CYN=$'\e[38;5;84m'
+      WB_PNK=$'\e[38;5;120m'; WB_GRY=$'\e[38;5;250m'; WB_WHT=$'\e[38;5;255m'
+      WB_HDR=$'\e[38;5;120m'; WB_AC=$'\e[38;5;48m'; WB_LBL=$'\e[1m\e[38;5;120m'
+      WB_DEV=$'\e[38;5;150m'; WB_GOLD=$'\e[1m\e[38;5;154m'; WB_NEON_ORANGE=$'\e[1m\e[38;5;118m'
+      ;;
+    light-paper)
+      WB_D=$'\e[38;5;240m'; WB_YEL=$'\e[38;5;136m'; WB_CYN=$'\e[38;5;31m'
+      WB_PNK=$'\e[38;5;125m'; WB_GRY=$'\e[38;5;238m'; WB_WHT=$'\e[38;5;233m'
+      WB_HDR=$'\e[38;5;25m'; WB_AC=$'\e[38;5;31m'; WB_LBL=$'\e[1m\e[38;5;25m'
+      WB_DEV=$'\e[38;5;94m'; WB_GOLD=$'\e[1m\e[38;5;130m'; WB_NEON_ORANGE=$'\e[1m\e[38;5;166m'
+      ;;
+    mono-safe)
+      WB_D=$'\e[38;5;245m'; WB_YEL=$'\e[38;5;250m'; WB_CYN=$'\e[38;5;250m'
+      WB_PNK=$'\e[38;5;250m'; WB_GRY=$'\e[38;5;245m'; WB_WHT=$'\e[38;5;253m'
+      WB_HDR=$'\e[38;5;253m'; WB_AC=$'\e[38;5;245m'; WB_LBL=$'\e[1m\e[38;5;253m'
+      WB_DEV=$'\e[38;5;250m'; WB_GOLD=$'\e[1m\e[38;5;253m'; WB_NEON_ORANGE=$'\e[1m\e[38;5;253m'
+      ;;
+    *)
+      WB_D=$'\e[38;5;245m'; WB_YEL=$'\e[38;5;221m'; WB_CYN=$'\e[38;5;81m'
+      WB_PNK=$'\e[38;5;211m'; WB_GRY=$'\e[38;5;250m'; WB_WHT=$'\e[38;5;253m'
+      WB_HDR=$'\e[38;5;117m'; WB_AC=$'\e[38;5;81m'; WB_LBL=$'\e[1m\e[38;5;111m'
+      WB_DEV=$'\e[38;5;180m'; WB_GOLD=$'\e[1m\e[38;5;220m'; WB_NEON_ORANGE=$'\e[1m\e[38;5;208m'
+      ;;
+  esac
   WB_DM=$'\006'                 # sentinel for adaptive-dim grey (swapped per stripe)
 }
 
 # ---- platform ---------------------------------------------------------------
 __wb_os() { case "$(uname -s 2>/dev/null)" in Darwin) echo macos;; *) echo linux;; esac; }
 __wb_run_timeout() {
-  local seconds="$1"; shift
+  local seconds="$1" timeout_bin; shift
   if command -v timeout >/dev/null 2>&1; then
-    timeout "$seconds" "$@"
+    timeout_bin=timeout
+  elif command -v gtimeout >/dev/null 2>&1; then
+    timeout_bin=gtimeout
+  fi
+  if [ -n "${timeout_bin:-}" ]; then
+    "$timeout_bin" "$seconds" "$@"
   else
     "$@"
   fi
+}
+__wb_seconds() {
+  local value="${1:-}" fallback="${2:-1}"
+  [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]] && printf '%s' "$value" || printf '%s' "$fallback"
+}
+
+# ---- tiny state + startup UX helpers ---------------------------------------
+__wb_state_file() {
+  printf '%s' "${WELCOME_BOARD_STATE_FILE:-$HOME/.local/state/welcome-board/settings.state}"
+}
+__wb_state_get() {
+  local key="$1" default="${2:-}" file value
+  file="$(__wb_state_file)"
+  if [ -r "$file" ]; then
+    value=$(awk -F= -v k="$key" '$1==k {print substr($0, length(k)+2); found=1} END{exit found?0:1}' "$file" 2>/dev/null) \
+      && { printf '%s' "$value"; return; }
+  fi
+  printf '%s' "$default"
+}
+__wb_state_set() {
+  local key="$1" value="$2" file dir tmp
+  [[ "$key" =~ ^[A-Za-z0-9_]+$ ]] || return 2
+  value="$(__wb_safe_token "$value" 200)"
+  file="$(__wb_state_file)"; dir=$(dirname "$file")
+  mkdir -p "$dir" 2>/dev/null || return 0
+  tmp="${file}.tmp.$$"
+  if [ -r "$file" ]; then awk -F= -v k="$key" '$1!=k {print}' "$file" > "$tmp" 2>/dev/null || : > "$tmp"; else : > "$tmp"; fi
+  printf '%s=%s\n' "$key" "$value" >> "$tmp"
+  mv "$tmp" "$file" 2>/dev/null || rm -f "$tmp"
+}
+__wb_state_increment() {
+  local key="$1" value
+  value="$(__wb_state_get "$key" 0)"
+  [[ "$value" =~ ^[0-9]+$ ]] || value=0
+  value=$((value + 1))
+  __wb_state_set "$key" "$value"
+  printf '%s' "$value"
+}
+__wb_animation_enabled() {
+  case "${WB_ANIMATE:-}" in 1|yes|true|on) return 0;; 0|no|false|off) return 1;; esac
+  [ "$(__wb_state_get animation_enabled 1)" != 0 ]
+}
+__wb_interactive_terminal() { [[ $- == *i* ]] && [ -t 0 ] && [ -t 1 ]; }
+__wb_quiet_start() {
+  [ "${WB_HIDE_INPUT_DURING_RENDER:-1}" != 0 ] || return 0
+  [ -t 0 ] && [ -t 1 ] || return 0
+  _WB_STTY_SAVED=$(stty -g </dev/tty 2>/dev/null || true)
+  [ -n "$_WB_STTY_SAVED" ] && stty -echo </dev/tty 2>/dev/null || true
+}
+__wb_quiet_stop() {
+  [ -n "${_WB_STTY_SAVED:-}" ] && stty "$_WB_STTY_SAVED" </dev/tty 2>/dev/null || true
+  _WB_STTY_SAVED=""
+}
+__wb_input_pending() {
+  [ -t 0 ] || return 1
+  read -r -t 0 </dev/tty 2>/dev/null
+}
+__wb_clear_lines() {
+  local n="$1"
+  while ((n > 0)); do printf '\033[1A\033[2K'; n=$((n - 1)); done
+}
+__wb_nudge_row() {
+  local width="$1" plain="$2" colored="$3" vis pad
+  vis=$(__wb_vis "$colored")
+  pad=$((width - vis - 2))
+  ((pad < 0)) && pad=0
+  printf '%s%s|%s %s%*s %s|%s\n' "$_WB_NUDGE_INDENT" "$WB_CYN" "$WB_R" "$colored" "$pad" "" "$WB_CYN" "$WB_R"
+}
+__wb_animation_nudge_box() {
+  local width=58 border title_plain title_color ask_plain ask_color options_plain options_color hint_plain hint_color
+  border="+$(__wb_repeat '-' "$width")+"
+  printf -v _WB_NUDGE_INDENT '%*s' $((2 + (80 - width - 2) / 2)) ''
+  title_plain="QUICK SETTINGS - WELCOME BOARD"
+  title_color="${WB_PNK}${WB_B}QUICK SETTINGS${WB_FR}${WB_D} - welcome board"
+  ask_plain="Tune the startup animation?"
+  ask_color="${WB_WHT}Tune the startup animation?${WB_FR} ${WB_D}One key, no menu."
+  if __wb_animation_enabled; then
+    options_plain="1 keep animation   2 turn off   3 ask later"
+    options_color="${WB_GRN}${WB_B}1${WB_FR} keep animation   ${WB_YEL}${WB_B}2${WB_FR} turn off   ${WB_CYN}${WB_B}3${WB_FR} ask later"
+  else
+    options_plain="1 turn animation on   2 keep off   3 ask later"
+    options_color="${WB_GRN}${WB_B}1${WB_FR} turn animation on   ${WB_YEL}${WB_B}2${WB_FR} keep off   ${WB_CYN}${WB_B}3${WB_FR} ask later"
+  fi
+  hint_plain="reply 1, 2, or 3 - anything else vanishes"
+  hint_color="${WB_D}reply ${WB_CYN}1${WB_D}, ${WB_CYN}2${WB_D}, or ${WB_CYN}3${WB_D} - anything else vanishes"
+  printf '%s%s%s%s\n' "$_WB_NUDGE_INDENT" "$WB_CYN" "$border" "$WB_R"
+  __wb_nudge_row "$width" "$title_plain" "$title_color"
+  __wb_nudge_row "$width" "$ask_plain" "$ask_color"
+  __wb_nudge_row "$width" "$options_plain" "$options_color"
+  __wb_nudge_row "$width" "$hint_plain" "$hint_color"
+  printf '%s%s%s%s\n' "$_WB_NUDGE_INDENT" "$WB_CYN" "$border" "$WB_R"
+}
+__wb_animation_nudge_due() {
+  local starts prompts target
+  starts="$(__wb_state_get start_count 0)"
+  prompts="$(__wb_state_get animation_prompt_count 0)"
+  [[ "$starts" =~ ^[0-9]+$ ]] || starts=0
+  [[ "$prompts" =~ ^[0-9]+$ ]] || prompts=0
+  if ((prompts < 3)); then
+    target=$(( (prompts + 1) * 3 ))
+    ((starts >= target))
+    return
+  fi
+  [ "${WB_NUDGE_RARE_FORCE:-0}" = 1 ] && return 0
+  ((RANDOM % 100 == 0))
+}
+__wb_apply_animation_choice() {
+  case "${1:-}" in
+    1) __wb_state_set animation_enabled 1 ;;
+    2) __wb_state_set animation_enabled 0 ;;
+    3) : ;;
+    *) : ;;
+  esac
+}
+__wb_animation_nudge_prompt() {
+  __wb_interactive_terminal || return 0
+  __wb_animation_nudge_due || return 0
+  __wb_input_pending && return 0
+
+  local answer timeout="${WB_NUDGE_TIMEOUT:-6}"
+  __wb_animation_nudge_box
+  IFS= read -r -s -n 1 -t "$timeout" answer </dev/tty 2>/dev/null || answer=""
+  __wb_clear_lines 6
+  __wb_state_increment animation_prompt_count >/dev/null
+  __wb_apply_animation_choice "$answer"
 }
 
 # ---- frame + row primitives -------------------------------------------------
@@ -145,8 +311,8 @@ __wb_zrow() {                                         # $1 = WB_FR-reset content
 
 # ---- time-aware greeting (first name only, from config) ---------------------
 
-# ---- BANNER (brand mark; figlet-style block art + binary subtitle) ----------
-__wb_banner_baked() {   # pre-baked ANSI-Shadow "CLAMSHELL" brand art (default / fallback)
+# ---- BANNER (machine mark; figlet-style block art + binary subtitle) --------
+__wb_banner_baked() {   # legacy ANSI-Shadow art used only when explicitly wired
   cat <<'ART'
   ██████╗██╗      █████╗ ███╗   ███╗███████╗██╗  ██╗███████╗██╗     ██╗
  ██╔════╝██║     ██╔══██╗████╗ ████║██╔════╝██║  ██║██╔════╝██║     ██║
@@ -157,9 +323,11 @@ __wb_banner_baked() {   # pre-baked ANSI-Shadow "CLAMSHELL" brand art (default /
 ART
 }
 __wb_banner_art() {   # echoes the banner art lines (no colour). Reused by the animation.
-  local txt
-  txt="$(__wb_safe_token "${WB_BANNER_TEXT:-CLAMSHELL}" 40)"
-  if [ -z "$txt" ] || [ "$txt" = "CLAMSHELL" ]; then __wb_banner_baked; return; fi
+  local txt upper
+  txt="$(__wb_safe_token "${WB_BANNER_TEXT:-$(__wb_default_banner_text)}" 40)"
+  [ -n "$txt" ] || txt="WORKSTATION"
+  upper="$(printf '%s' "$txt" | tr '[:lower:]' '[:upper:]')"
+  [ "$upper" = "CLAMSHELL" ] && { __wb_banner_baked; return; }
   if command -v figlet >/dev/null 2>&1; then
     figlet -w 120 -- "$txt" 2>/dev/null | grep -v '^[[:space:]]*$'
   elif command -v toilet >/dev/null 2>&1; then
@@ -168,10 +336,19 @@ __wb_banner_art() {   # echoes the banner art lines (no colour). Reused by the a
     printf '  >>>  %s  <<<\n' "$txt"
   fi
 }
+__wb_banner_color_lines() {
+  case "${WB_THEME:-cyan-dark}" in
+    amber-terminal) printf '%s\n' $'\e[38;5;220m' $'\e[38;5;214m' $'\e[38;5;208m' $'\e[38;5;202m' $'\e[38;5;166m' $'\e[38;5;130m' ;;
+    green-phosphor) printf '%s\n' $'\e[38;5;154m' $'\e[38;5;120m' $'\e[38;5;84m' $'\e[38;5;48m' $'\e[38;5;40m' $'\e[38;5;34m' ;;
+    light-paper) printf '%s\n' $'\e[38;5;25m' $'\e[38;5;31m' $'\e[38;5;37m' $'\e[38;5;94m' $'\e[38;5;130m' $'\e[38;5;166m' ;;
+    mono-safe) printf '%s\n' $'\e[38;5;253m' $'\e[38;5;250m' $'\e[38;5;248m' $'\e[38;5;246m' $'\e[38;5;244m' $'\e[38;5;242m' ;;
+    *) printf '%s\n' $'\e[38;5;45m' $'\e[38;5;81m' $'\e[38;5;75m' $'\e[38;5;39m' $'\e[38;5;33m' $'\e[38;5;69m' ;;
+  esac
+}
 # binary subtitle = the banner word as 8-bit ASCII (pure bash, bash-3.2 safe)
 __wb_banner_binary() {
   local txt b="" i j ch code byte
-  txt=$(printf '%s' "$(__wb_safe_token "${WB_BANNER_TEXT:-clamshell}" 40)" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9'); : "${txt:=clamshell}"
+  txt=$(printf '%s' "$(__wb_safe_token "${WB_BANNER_TEXT:-$(__wb_default_banner_text)}" 40)" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9'); : "${txt:=workstation}"
   txt="${txt:0:12}"
   for ((i=0; i<${#txt}; i++)); do
     ch="${txt:i:1}"; printf -v code '%d' "'$ch"; byte=""
@@ -183,7 +360,7 @@ __wb_banner_binary() {
 __wb_banner() {
   local binary; binary=$(__wb_banner_binary)
   local -a art=(); local __l; while IFS= read -r __l; do art+=("$__l"); done < <(__wb_banner_art)
-  local -a g=($'\e[38;5;45m' $'\e[38;5;81m' $'\e[38;5;75m' $'\e[38;5;39m' $'\e[38;5;33m' $'\e[38;5;69m')
+  local -a g=(); while IFS= read -r __l; do g+=("$__l"); done < <(__wb_banner_color_lines)
   local i line lead minlead=99 max_art=0 fw=$(( WB_FRAME_INNER + 2 )) pad bpad
   # normalize: strip the common leading whitespace so the art block is flush-left
   for line in "${art[@]}"; do lead="${line%%[![:space:]]*}"; (( ${#lead} < minlead )) && minlead=${#lead}; done
@@ -362,37 +539,98 @@ __wb_hermes_full() {
 
 # ---- FOOTER (update notice — below the board so it never confuses hierarchy) -
 
-# ---- ANIMATION (showpiece; opt-in. Login stays static + instant.) -----------
-#  Banner SLAMS in from behind the right edge to its resting left position, then
-#  the binary subtitle DECODES left-to-right. Synchronous + fast (~0.4s),
-#  finishes before the prompt. Never used at login unless WB_ANIMATE=1.
+# ---- ANIMATION (default-on startup showpiece) -------------------------------
+#  Banner wakes up while the board body preloads into a buffer, then the binary
+#  subtitle decodes left-to-right. Terminal echo is hidden during startup so
+#  early keystrokes do not visibly collide with the board.
 __wb_anim_supported() { [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; }
+__wb_anim_sleep() {
+  local seconds
+  seconds="$(__wb_seconds "${1:-0}" 0)"
+  [ "$seconds" != 0 ] && sleep "$seconds" 2>/dev/null
+}
+__wb_anim_sleep_ms() {
+  local ms="${1:-0}" seconds
+  [[ "$ms" =~ ^[0-9]+$ ]] || ms=0
+  if ((ms >= 1000)); then
+    printf -v seconds '%d.%03d' "$((ms / 1000))" "$((ms % 1000))"
+  else
+    printf -v seconds '0.%03d' "$ms"
+  fi
+  __wb_anim_sleep "$seconds"
+}
 __wb_animate_banner() {
   __wb_anim_supported || { __wb_banner; return; }
   # always restore the cursor, even if the animation is interrupted (Ctrl-C)
   trap 'printf "\033[?25h"; trap - RETURN INT' RETURN INT
   local -a art=(); local __l; while IFS= read -r __l; do art+=("$__l"); done < <(__wb_banner_art)
-  local -a g=($'\e[38;5;45m' $'\e[38;5;81m' $'\e[38;5;75m' $'\e[38;5;39m' $'\e[38;5;33m' $'\e[38;5;69m')
-  local h=${#art[@]} cols max_art=0 line i
+  local -a g=(); while IFS= read -r __l; do g+=("$__l"); done < <(__wb_banner_color_lines)
+  local h=${#art[@]} cols max_art=0 line i lead minlead=99
   cols=$(tput cols 2>/dev/null || echo 100)
-  for line in "${art[@]}"; do ((${#line} > max_art)) && max_art=${#line}; done
+  for line in "${art[@]}"; do lead="${line%%[![:space:]]*}"; (( ${#lead} < minlead )) && minlead=${#lead}; done
+  (( minlead == 99 )) && minlead=0
+  for i in "${!art[@]}"; do art[i]="${art[i]:minlead}"; ((${#art[i]} > max_art)) && max_art=${#art[i]}; done
   local binary; binary=$(__wb_banner_binary)
-  local home_pad=$(( (2 + ${#binary} - max_art) / 2 )); ((home_pad<0)) && home_pad=0
+  local fw=$(( WB_FRAME_INNER + 2 ))
+  local home_pad=$(( 2 + (fw - max_art) / 2 )); ((home_pad<0)) && home_pad=0
+  local binary_pad=$(( 2 + (fw - ${#binary}) / 2 )); ((binary_pad<0)) && binary_pad=0
   for ((i=0;i<h;i++)); do printf '\n'; done
   printf '\e[?25l'
-  local start=$(( cols - max_art - 2 )); ((start<home_pad)) && start=home_pad
-  local off
-  for ((off=start; off>home_pad; off-=6)); do
+  local chunks="${WB_ANIMATION_CHUNKS:-7}" chunk frame frames launch_step slide_frames delay_ms color line_out chunk_start chunk_end final_pad incoming_width start progress off slice cursor rel gap
+  [[ "$chunks" =~ ^[0-9]+$ ]] || chunks=7
+  ((chunks < 2)) && chunks=2
+  ((chunks > max_art)) && chunks=$max_art
+  launch_step="${WB_ANIMATION_LAUNCH_STEP:-2}"
+  slide_frames="${WB_ANIMATION_SLIDE_FRAMES:-7}"
+  delay_ms="${WB_ANIMATION_FRAME_DELAY_MS:-30}"
+  [[ "$launch_step" =~ ^[0-9]+$ ]] || launch_step=2
+  [[ "$slide_frames" =~ ^[0-9]+$ ]] || slide_frames=7
+  [[ "$delay_ms" =~ ^[0-9]+$ ]] || delay_ms=7
+  ((launch_step < 1)) && launch_step=1
+  ((slide_frames < 3)) && slide_frames=3
+  frames=$(( (chunks - 1) * launch_step + slide_frames ))
+  for ((frame=0; frame<=frames; frame++)); do
     printf '\e[%dA' "$h"
-    for ((i=0;i<h;i++)); do printf '\e[2K%*s%s%s%s\n' "$off" '' "${g[i]}" "${art[i]}" "$WB_R"; done
-    sleep 0.018 2>/dev/null
+    for ((i=0;i<h;i++)); do
+      color="${g[$((i % ${#g[@]}))]}"
+      line_out=""
+      cursor=0
+      for ((chunk=1; chunk<=chunks; chunk++)); do
+        chunk_start=$(( (max_art * (chunk - 1)) / chunks ))
+        chunk_end=$(( (max_art * chunk + chunks - 1) / chunks ))
+        ((chunk_end > max_art)) && chunk_end=$max_art
+        incoming_width=$((chunk_end - chunk_start))
+        final_pad=$((home_pad + chunk_start))
+        start=$((cols - incoming_width - 2))
+        ((start < final_pad)) && start=$final_pad
+        progress=$((frame - (chunk - 1) * launch_step))
+        if ((progress < 0)); then
+          continue
+        elif ((progress >= slide_frames)); then
+          off=$final_pad
+        else
+          off=$((start - ((start - final_pad) * progress / slide_frames) ))
+        fi
+        slice="${art[i]:chunk_start:incoming_width}"
+        rel=$((off - home_pad))
+        gap=$((rel - cursor))
+        ((gap < 0)) && gap=0
+        line_out+=$(printf '%*s%s' "$gap" '' "$slice")
+        cursor=$((rel + incoming_width))
+      done
+      printf '\e[2K%*s%s%s%s\n' "$home_pad" '' "$color" "$line_out" "$WB_R"
+    done
+    __wb_anim_sleep_ms "$delay_ms"
   done
   printf '\e[%dA' "$h"
-  for ((i=0;i<h;i++)); do printf '\e[2K%*s%s%s%s\n' "$home_pad" '' "${g[i]}" "${art[i]}" "$WB_R"; done
+  for ((i=0;i<h;i++)); do
+    color="${g[$((i % ${#g[@]}))]}"
+    printf '\e[2K%*s%s%s%s\n' "$home_pad" '' "$color" "${art[i]}" "$WB_R"
+  done
   printf '\e[?25h'
   local ch
-  printf '  %s' "$WB_HDR"
-  for ((i=0;i<${#binary};i++)); do ch="${binary:i:1}"; printf '%s' "$ch"; case "$ch" in [01]) sleep 0.004 2>/dev/null;; esac; done
+  printf '%*s%s' "$binary_pad" '' "$WB_HDR"
+  for ((i=0;i<${#binary};i++)); do ch="${binary:i:1}"; printf '%s' "$ch"; case "$ch" in [01]) __wb_anim_sleep "${WB_ANIMATION_BINARY_DELAY:-0.002}";; esac; done
   printf '%s\n' "$WB_R"
 }
 
@@ -403,13 +641,9 @@ __wb_probe_listeners() {
     WB_LISTENP=$(__wb_run_timeout 1 ss -tlnHp 2>/dev/null || true)
   else WB_LISTEN=""; WB_LISTENP=""; fi
 }
-__wb_render() {
-  local animate="${1:-0}"
-  __wb_load_config; __wb_paint
-  WB_FRAME_ON=1; WB_W=$WB_FRAME_INNER; WB_ZW=$WB_FRAME_INNER
-  __wb_probe_listeners
-  printf '\n'
-  if [ "$animate" = 1 ] || [ "${WB_ANIMATE:-0}" = 1 ]; then __wb_animate_banner; else __wb_banner; fi
+__wb_render_body() {
+  _WB_HDR_COUNT=0
+  _WB_HIST_TRIMMED=""
   __wb_frame_top
   __wb_greeting_row
   __wb_machine
@@ -421,23 +655,66 @@ __wb_render() {
   __wb_commands
   __wb_frame_bottom
   __wb_footer
+}
+__wb_render() {
+  local animate="${1:-auto}" body_file body_pid
+  __wb_load_config; __wb_paint
+  WB_FRAME_ON=1; WB_W=$WB_FRAME_INNER; WB_ZW=$WB_FRAME_INNER
+
+  __wb_quiet_start
+  trap '__wb_quiet_stop; trap - RETURN INT TERM' RETURN INT TERM
+
+  body_file=$(mktemp "${TMPDIR:-/tmp}/welcome-board-body.XXXXXX" 2>/dev/null || printf '')
+  if [ -n "$body_file" ]; then
+    ( __wb_probe_listeners; __wb_render_body ) > "$body_file" 2>/dev/null &
+    body_pid=$!
+  else
+    body_pid=""
+  fi
+
+  printf '\n'
+  if [ "$animate" = 1 ] || { [ "$animate" = auto ] && __wb_animation_enabled; }; then
+    __wb_animate_banner
+  else
+    __wb_banner
+  fi
+
+  if [ -n "$body_pid" ]; then
+    wait "$body_pid" 2>/dev/null || true
+    cat "$body_file"
+    rm -f "$body_file"
+  else
+    __wb_probe_listeners
+    __wb_render_body
+  fi
+
+  if __wb_interactive_terminal; then
+    __wb_state_increment start_count >/dev/null
+  fi
+  __wb_quiet_stop
+  [ "${WELCOME_BOARD_DEFER_NUDGE:-0}" = 1 ] || __wb_animation_nudge_prompt
   WB_FRAME_ON=0
+  trap - RETURN INT TERM
 }
 
 # ---- user commands ----------------------------------------------------------
-clamboard() {
-  case "$1" in --animate|-a|animate) __wb_render 1;; *) __wb_render 0;; esac
+welcomeBoard() {
+  case "$1" in --animate|-a|animate) __wb_render 1;; *) __wb_render auto;; esac
   printf '\n'
+}
+welcomeBoardQuickSettings() {
+  __wb_load_config; __wb_paint
+  __wb_animation_nudge_prompt
 }
 hkeys() { __wb_load_config; __wb_paint; WB_FRAME_ON=1; WB_W=$WB_FRAME_INNER; WB_ZW=$WB_FRAME_INNER
   __wb_frame_top; __wb_hermes_full; __wb_frame_bottom; WB_FRAME_ON=0; }
 keys() { hkeys; }
-clamhelp() {
+welcomeHelp() {
   __wb_load_config; __wb_paint
   printf '\n  %s▌%s %sWELCOME BOARD — FULL REFERENCE%s\n' "$WB_AC" "$WB_R" "$WB_HDR$WB_B" "$WB_R"
   local -a sec=(
-    "BOARD" 'clamboard|reprint the welcome board' 'clamboard --animate|play the slam-in animation'
-    'wb render|same board via the wb CLI' 'hkeys / keys|reprint the Hermes shortcuts'
+    "BOARD" 'wb|reprint the welcome board' 'wb animate|play the centered banner animation'
+    'welcomeBoard|same board as a sourced helper' 'hkeys / keys|reprint the Hermes shortcuts'
     "UPDATE / INSTALL"
     'update-all|apt·brew·snap·node·npm·uv·pipx·gh + claude + codex'
     'npm i -g @openai/codex@latest|install / upgrade Codex CLI'
@@ -473,16 +750,17 @@ clamhelp() {
 #  graphs, neon name, funnier welcome, 2-above-1-below section spacing.
 # ===========================================================================
 
-# --- palette additions (set globally; __wb_paint never clears these) --------
+# --- palette fallbacks for helpers called before __wb_paint ------------------
 WB_GOLD=$'\e[1m\e[38;5;220m'          # bold gold — group sub-headers
 WB_NEON_ORANGE=$'\e[1m\e[38;5;208m'   # bold neon orange — the name, pops
 
-# --- section header: TWO blank rows above, title divider, ONE blank below ---
+# --- section header: first section gets two blank rows; later sections get one
 __wb_hdr() {
   local lbl="$1" rule
   rule=$(( WB_FRAME_INNER - ${#lbl} - 3 )); ((rule < 4)) && rule=4
   __wb_plainrow ""
-  __wb_plainrow ""
+  if [ "${_WB_HDR_COUNT:-0}" -eq 0 ]; then __wb_plainrow ""; fi
+  _WB_HDR_COUNT=$(( ${_WB_HDR_COUNT:-0} + 1 ))
   printf '  %s├%s─ %s%s%s %s%s┤%s\n' \
     "$WB_AC" "$WB_D" "$WB_YEL$WB_B" "$lbl" "$WB_R$WB_D" \
     "$(__wb_repeat '─' "$rule")" "$WB_AC" "$WB_R"
@@ -503,7 +781,7 @@ __wb_greeting() {   # echoes: HELLO<TAB>TAGLINE
     msg=("the day's still got moves left." "ship one thing before dark." "the box is yours." "quiet hum, green lights." "one more good push?")
   else
     hi=("Working late" "Burning the oil" "Night owl" "Witching hour" "Still here")
-    msg=("sleep is a config flag — leave it set." "the machines don't blink; you should." "low light, high focus." "the LAN never sleeps; you can." "make it count, then rack out.")
+    msg=("sleep is a config flag - leave it set." "the machines don't blink; you should." "low light, high focus." "the LAN never sleeps; you can." "make it count, then rack out.")
   fi
   printf '%s\t%s' "${hi[RANDOM % ${#hi[@]}]}" "${msg[RANDOM % ${#msg[@]}]}"
 }
@@ -523,7 +801,15 @@ __wb_clock_pct() { local c="${1:-0}" m="${2:-0}"; [[ "$c" =~ ^[0-9]+$ ]]||c=0; [
 # temp → % of the 30→100°C thermal range, so the gauge means "thermal headroom used" (NOT raw °C as %)
 __wb_temppct() { local t="${1:-0}"; [[ "$t" =~ ^[0-9]+$ ]] || t=0; local p=$(( (t-30)*100/70 )); ((p<0))&&p=0; ((p>100))&&p=100; printf '%s' "$p"; }
 __wb_hist_path() { printf '%s' "${WELCOME_BOARD_MACHINE_HISTORY:-$HOME/.local/state/welcome-board/machine-series.tsv}"; }
-__wb_hist_trim() { local p="$1" t; [ -f "$p" ] || return 0; t="${p}.tmp.$$"; tail -n 1024 "$p" >"$t" 2>/dev/null && mv "$t" "$p"; rm -f "$t" 2>/dev/null||true; }
+__wb_hist_trim() {
+  local p="$1" t
+  [ -f "$p" ] || return 0
+  [ "${_WB_HIST_TRIMMED:-}" = "$p" ] && return 0
+  _WB_HIST_TRIMMED="$p"
+  t="${p}.tmp.$$"
+  tail -n 1024 "$p" >"$t" 2>/dev/null && mv "$t" "$p"
+  rm -f "$t" 2>/dev/null || true
+}
 __wb_hist_add()  { local k="$1" v; v="$(__wb_pct "$2")"; local p d; p="$(__wb_hist_path)"; d=$(dirname "$p"); mkdir -p "$d" 2>/dev/null||return 0; printf '%s\t%s\t%s\n' "$(date +%s 2>/dev/null||echo 0)" "$k" "$v" >>"$p" 2>/dev/null||return 0; }
 # history sparkline (width + glyphs come from WB_SPARK_N / WB_SPARK globals)
 : "${WB_SPARK:=▁▂▃▄▅▆▇█}"; : "${WB_SPARK_N:=8}"
@@ -542,14 +828,16 @@ __wb_hist_graph() {
 # (__wb_mrow + __wb_msub are VARIANT-specific; defined below)
 
 # --- network throughput (real /proc/net/dev delta; no mocks) -----------------
-__wb_netrate() {   # echoes: iface rxKBs txKBs  (sum non-loopback over a 0.1s delta)
-  local r1 t1 r2 t2 nif
+__wb_netrate() {   # echoes: iface rxKBs txKBs  (sum non-loopback over a tiny delta)
+  [ -r /proc/net/dev ] || { printf 'net 0 0'; return; }
+  local r1 t1 r2 t2 nif delay
+  delay="$(__wb_seconds "${WB_NETRATE_DELAY:-0.04}" 0.04)"
   read -r r1 t1 < <(awk 'NR>2{gsub(":"," "); if($1!="lo"){rx+=$2;tx+=$10}} END{print rx+0,tx+0}' /proc/net/dev 2>/dev/null)
-  sleep 0.1 2>/dev/null
+  [ "$delay" != 0 ] && sleep "$delay" 2>/dev/null
   read -r r2 t2 < <(awk 'NR>2{gsub(":"," "); if($1!="lo"){rx+=$2;tx+=$10}} END{print rx+0,tx+0}' /proc/net/dev 2>/dev/null)
-  nif=$(ip route 2>/dev/null | awk '/^default/{print $5; exit}'); : "${nif:=net}"
+  nif=$(__wb_run_timeout 0.2 ip route 2>/dev/null | awk '/^default/{print $5; exit}'); : "${nif:=net}"
   awk -v a="${r1:-0}" -v b="${r2:-0}" -v c="${t1:-0}" -v d="${t2:-0}" -v i="$nif" \
-    'BEGIN{printf "%s %.0f %.0f", i, (b-a)/0.1/1024, (d-c)/0.1/1024}'
+    -v delay="$delay" 'BEGIN{dly=(delay+0>0)?delay:1; printf "%s %.0f %.0f", i, (b-a)/dly/1024, (d-c)/dly/1024}'
 }
 
 # --- load row routes through __wb_mrow so it matches each variant's style ----
@@ -678,6 +966,27 @@ __wb_machine_macos() {
 # ===========================================================================
 
 # --- NETWORK: throughput graph (real /proc/net/dev) + connectivity, one home -
+__wb_tailscale_ip() {
+  local status="$1" match="$2"
+  [ -n "$match" ] || return 1
+  awk -v m="$match" 'index($0, m) {print $1; exit}' <<< "$status"
+}
+__wb_tailscale_active() {
+  local status="$1" match="$2"
+  [ -n "$match" ] || return 1
+  awk -v m="$match" 'index($0, m) && tolower($0) ~ /active/ {found=1} END{exit found?0:1}' <<< "$status"
+}
+__wb_peer_probe() {
+  local probe="$1" probe_timeout phost pport
+  [ -n "$probe" ] || return 1
+  [[ "$probe" == *:* ]] || return 1
+  probe_timeout="$(__wb_seconds "${WB_PEER_PROBE_TIMEOUT:-0.2}" 0.2)"
+  phost="${probe%:*}"; pport="${probe##*:}"
+  [[ "$phost" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
+  [[ "$pport" =~ ^[0-9]+$ ]] || return 1
+  [ "$pport" -ge 1 ] 2>/dev/null && [ "$pport" -le 65535 ] 2>/dev/null || return 1
+  __wb_run_timeout "$probe_timeout" bash -c 'exec 3<>"/dev/tcp/$1/$2"' bash "$phost" "$pport" 2>/dev/null
+}
 __wb_network() {
   __wb_hdr "NETWORK"; __wb_zreset
   local nif nrx ntx npct
@@ -685,24 +994,23 @@ __wb_network() {
   nif="$(__wb_safe_token "${nif:-—}" 40)"
   npct=$(awk -v r="${nrx:-0}" -v t="${ntx:-0}" 'BEGIN{m=(r>t)?r:t;p=m/12500*100;p=(p>100)?100:p;printf "%d",p}')
   __wb_mrow "RATE" "${npct}" "$(__wb_hist_graph net "${npct}")" "${WB_DEV}${nif:-—}  ${WB_DM}down ${WB_WHT}${nrx:-0}${WB_DM} · up ${WB_WHT}${ntx:-0}${WB_DM} KB/s"
-  local ts self peer nm match probe ip st
-  ts=$(__wb_run_timeout 1 tailscale status 2>/dev/null || true)
+  local ts="" self peer nm match probe ip st
+  if [ -n "${WB_PEERS:-}" ] && command -v tailscale >/dev/null 2>&1; then
+    ts=$(__wb_run_timeout "$(__wb_seconds "${WB_TAILSCALE_TIMEOUT:-0.45}" 0.45)" tailscale status 2>/dev/null || true)
+  fi
   self="$(__wb_safe_token "$(hostname 2>/dev/null | cut -d. -f1)" 32)"
   if [ -n "$self" ]; then
-    ip=$(echo "$ts" | awk -v h="$self" '$0 ~ h {print $1; exit}'); : "${ip:=$(hostname -I 2>/dev/null | awk '{print $1}')}"
+    ip="$(__wb_tailscale_ip "$ts" "$self")"; : "${ip:=$(__wb_run_timeout 0.2 hostname -I 2>/dev/null | awk '{print $1}')}"
     ip="$(__wb_safe_token "${ip:-?}" 64)"
     __wb_zrow "${WB_LBL}$(printf '%-6s' "${self:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "$ip")${WB_DM}· this machine"
   fi
   local IFS_SAVE="$IFS"
   for peer in ${WB_PEERS:-}; do
     IFS='|' read -r nm match probe <<<"$peer"; IFS="$IFS_SAVE"
-    ip=$(echo "$ts" | awk -v m="$match" '$0 ~ m {print $1; exit}')
-    local phost="${probe%:*}" pport="${probe##*:}"
-    if [ -n "$probe" ] && [[ "$phost" =~ ^[A-Za-z0-9._-]+$ ]] && [[ "$pport" =~ ^[0-9]+$ ]] \
-       && [ "$pport" -ge 1 ] 2>/dev/null && [ "$pport" -le 65535 ] 2>/dev/null \
-       && __wb_run_timeout 0.8 bash -c 'exec 3<>"/dev/tcp/$1/$2"' bash "$phost" "$pport" 2>/dev/null; then
-      st="${WB_GRN}● serving ${WB_DM}:${pport}"
-    elif echo "$ts" | grep -qi "$match.*active"; then st="${WB_GRN}● online"
+    ip="$(__wb_tailscale_ip "$ts" "$match")"
+    if __wb_peer_probe "$probe"; then
+      st="${WB_GRN}● serving ${WB_DM}:${probe##*:}"
+    elif __wb_tailscale_active "$ts" "$match"; then st="${WB_GRN}● online"
     else st="${WB_DM}○ offline"; fi
     local shown_nm shown_ip
     shown_nm="$(__wb_safe_token "$nm" 32)"
@@ -711,9 +1019,9 @@ __wb_network() {
   done
   IFS="$IFS_SAVE"
   local nssh sc ntmux tnames tmux_list
-  nssh=$(who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)'); : "${nssh:=0}"
+  nssh=$(__wb_run_timeout "$(__wb_seconds "${WB_NETWORK_COMMAND_TIMEOUT:-0.45}" 0.45)" who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)'); : "${nssh:=0}"
   sc=$WB_WHT; [ "${nssh:-0}" -ge 4 ] 2>/dev/null && sc=$WB_YEL
-  tmux_list="$(__wb_run_timeout 1 tmux ls 2>/dev/null || true)"
+  tmux_list="$(__wb_run_timeout "$(__wb_seconds "${WB_NETWORK_COMMAND_TIMEOUT:-0.45}" 0.45)" tmux ls 2>/dev/null || true)"
   ntmux=$(printf '%s\n' "$tmux_list" | sed '/^$/d' | wc -l | tr -d ' '); : "${ntmux:=0}"
   tnames=$(printf '%s\n' "$tmux_list" | sed 's/:.*//' | paste -sd, - | sed 's/,/, /g')
   tnames="$(__wb_safe_token "$tnames" 180)"
@@ -746,7 +1054,7 @@ __wb_cmdrow() {
 __wb_commands() {
   __wb_hdr "COMMANDS"; __wb_zreset
   __wb_cmdrow "update"  "${WB_CYN}update-all${WB_FR} ${WB_D}system + AI CLIs${WB_FR}   ${WB_CYN}restart${WB_FR} ${WB_D}reload shell"
-  __wb_cmdrow "board"   "${WB_CYN}clamboard${WB_FR} ${WB_D}reprint${WB_FR}   ${WB_CYN}wb setup${WB_FR} ${WB_D}customize${WB_FR}   ${WB_CYN}clamhelp${WB_FR} ${WB_D}all commands"
+  __wb_cmdrow "board"   "${WB_CYN}wb${WB_FR} ${WB_D}reprint${WB_FR}   ${WB_CYN}wb animate${WB_FR} ${WB_D}showpiece${WB_FR}   ${WB_CYN}welcomeHelp${WB_FR} ${WB_D}all commands"
   __wb_cmdrow "tmux"    "${WB_CYN}tmux${WB_FR} ${WB_D}list${WB_FR}  ${WB_CYN}tmux 2${WB_FR} ${WB_D}join${WB_FR}  ${WB_CYN}tmux new -s work${WB_FR}  ${WB_CYN}kill 1 2${WB_FR}  ${WB_D}detach ${WB_CYN}C-b d"
   __wb_cmdrow "network" "${WB_CYN}ssh-sessions${WB_FR} ${WB_D}who's on${WB_FR}  ${WB_CYN}ssh-reap${WB_FR} ${WB_D}kill ghosts${WB_FR}  ${WB_CYN}wb ports explain"
   local ccf="${WB_CUSTOM_COMMANDS_FILE:-$HOME/.config/welcome-board/commands}" cl cc ch n=0
@@ -773,4 +1081,4 @@ __wb_mrow() {
 }
 __wb_msub() { local s=""; [ -n "${2:-}" ] && s="  ${WB_DM}${2}${WB_FR}"; __wb_plainrow "${WB_GOLD}$(printf '%-6s' "$1")${WB_FR}${s}"; }
 
-if [[ $- == *i* ]] || [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then __wb_render 0; fi
+if [[ $- == *i* ]] || [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then __wb_render auto; fi

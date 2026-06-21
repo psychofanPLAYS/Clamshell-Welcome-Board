@@ -8,48 +8,45 @@
   01100011 01101100 01100001 01101101 01110011 01101000 01100101 01101100 01101100
   ┌──────────────────────────────────────────────────────────────────────────────┐
   │                                                                              │
-  │ Rise and grind, Alex. fresh window, clean slate.                             │
-  │ up 3d 20h 18m · Fri 19 Jun · 10:57                                           │
+  │ Good morning, Alex. the factory held all night.                              │
+  │ up 1d 17h 5m · Sun 21 Jun · 07:20                                            │
   │                                                                              │
   │                                                                              │
   ├─ MACHINE ────────────────────────────────────────────────────────────────────┤
   │                                                                              │
   │ CPU     i7-6700HQ                                                            │
-  │ USAGE  █░░░░░░░  15% ▁▁▁▁▁▁▁▂  2.60/3.50 GHz · 8 threads                     │
-  │ TEMP   ███░░░░░  44% ▁▁▁▁▁▁▁▄  61 °C                                         │
-  │ LOAD   ████░░░░  51% ▁▁▁▁▁▁▁▄   4.10 ·  4.66 ·  4.35                         │
+  │ USAGE  █░░░░░░░  18% ▁▁▁▁▁▁▁▂  2.71/3.50 GHz · 8 threads                     │
+  │ TEMP   ██░░░░░░  28% ▁▁▁▁▁▁▂▂  50 °C                                         │
+  │ LOAD   ██░░░░░░  27% ▁▁▁▁▁▁▃▂   2.19 ·  2.33 ·  2.58                         │
   │                                 1m      5m      15m                          │
   │                                                                              │
   │ RAM                                                                          │
-  │ USED   ████░░░░  61% ▁▁▁▁▁▁▁▅  9.5/16 GB                                     │
-  │ SWAP   ███████░  93% ▁▁▁▁▁▁▁▇  11.2/12 GB                                    │
+  │ USED   ████░░░░  62% ▁▁▁▁▁▁▅▅  9.7/16 GB                                     │
+  │ SWAP   ████░░░░  56% ▁▁▁▁▁▁▄▄  6.8/12 GB                                     │
   │                                                                              │
   │ GPU     GTX 1060                                                             │
   │ USAGE  ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  perf state P8                                 │
   │ POWER  ░░░░░░░░   5% ▁▁▁▁▁▁▁▁  4/78 W                                        │
-  │ TEMP   ██░░░░░░  30% ▁▁▁▁▁▁▁▃  51 °C                                         │
-  │ VRAM   ███████░  98% ▁▁▁▁▁▁▁▇  6059/6144 MB                                  │
+  │ TEMP   █░░░░░░░  17% ▁▁▁▁▁▁▂▂  42 °C                                         │
+  │ VRAM   ███████░  98% ▁▁▁▁▁▁▇▇  6059/6144 MB                                  │
   │ CORE   ░░░░░░░░   7% ▁▁▁▁▁▁▁▁  139/1911 MHz                                  │
   │ MEMCLK ░░░░░░░░  10% ▁▁▁▁▁▁▁▁  405/4004 MHz                                  │
   │                                                                              │
   │ DISK                                                                         │
-  │ ROOT   █░░░░░░░  18% ▁▁▁▁▁▁▁▂  76/468 GB                                     │
-  │                                                                              │
+  │ ROOT   █░░░░░░░  19% ▁▁▁▁▁▁▂▂  80/468 GB                                     │
   │                                                                              │
   ├─ NETWORK ────────────────────────────────────────────────────────────────────┤
   │                                                                              │
-  │ RATE   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  wlp59s0  down 2 · up 1 KB/s                   │
-  │ workst 10.0.0.10       · this machine                                        │
-  │ laptop 10.0.0.15       ● online                                              │
-  │ server 10.0.0.20       ● online                                              │
+  │ RATE   ░░░░░░░░   0% ▁▁▁▁▁▁▁▁  wlp59s0  down 0 · up 0 KB/s                   │
+  │ clamsh xxxxxxxxx       · this machine                                        │
+  │ laptop xxxxxxxxx       ● online                                              │
+  │ server xxxxxxxxx       ● online                                              │
   │ ssh    1 remote login(s) · clear ghosts → ssh-reap                           │
   │ tmux   2 session(s): work, agents                                            │
-  │                                                                              │
   │                                                                              │
   ├─ SECURITY ───────────────────────────────────────────────────────────────────┤
   │                                                                              │
   │ ▲ Unrecognized door: port 5000 — investigate                                 │
-  │                                                                              │
   │                                                                              │
   ├─ SERVICES ───────────────────────────────────────────────────────────────────┤
   │                                                                              │
@@ -57,13 +54,11 @@
   │ ssh · webdash · embedder · reranker · vector-db · gateway · api              │
   │ cockpit                                                                      │
   │                                                                              │
-  │                                                                              │
   ├─ AUTOMATION ─────────────────────────────────────────────────────────────────┤
   │                                                                              │
   │ jobs     3 loops · 4 cron — ingest · backups · agents                        │
   │ next up  indexer, backup, sync                                               │
   │ daily    digest 07:00 · index 01:30 · sync 03:00                             │
-  │                                                                              │
   │                                                                              │
   ├─ HERMES ─────────────────────────────────────────────────────────────────────┤
   │                                                                              │
@@ -72,11 +67,10 @@
   │ m#up/down/re gateway on·off·restart   m#doctor diagnose   m#setup wizard     │
   │ full cheat-sheet any time: hkeys                                             │
   │                                                                              │
-  │                                                                              │
   ├─ COMMANDS ───────────────────────────────────────────────────────────────────┤
   │                                                                              │
   │ update    update-all system + AI CLIs   restart reload shell                 │
-  │ board     clamboard reprint   wb setup customize   clamhelp all commands     │
+  │ board     wb reprint   wb animate showpiece   welcomeHelp all commands       │
   │ tmux      tmux list  tmux 2 join  tmux new -s work  kill 1 2  detach C-b d   │
   │ network   ssh-sessions who's on  ssh-reap kill ghosts  wb ports explain      │
   └──────────────────────────────────────────────────────────────────────────────┘

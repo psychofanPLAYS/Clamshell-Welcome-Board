@@ -22,6 +22,11 @@ class SecurityPolicyTests(unittest.TestCase):
             "wb ports scan",
             "wb ports explain",
             "wb ports plan",
+            "does not install a daemon",
+            "listen on a socket",
+            "expose a web UI",
+            "enable tunnels",
+            "WELCOME_BOARD_ALLOW_UNTRUSTED_BOARD_FILE",
             "Do not report secrets",
         ):
             self.assertIn(expected, policy)

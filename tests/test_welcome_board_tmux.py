@@ -130,6 +130,44 @@ class TmuxSectionTests(unittest.TestCase):
         self.assertTrue(framed_rows)
         self.assertEqual({len(line) for line in framed_rows}, {82})
 
+    def test_tailscale_peer_match_is_literal_not_regex(self) -> None:
+        """Peer names from config should not behave like regular expressions."""
+        with tempfile.TemporaryDirectory() as raw_tmp:
+            home = Path(raw_tmp)
+            bin_dir = home / "bin"
+            bin_dir.mkdir(parents=True, exist_ok=True)
+            (bin_dir / "tailscale").write_text(
+                "#!/usr/bin/env bash\n"
+                "printf '10.0.0.25 realhost user linux active\\n'\n",
+                encoding="utf-8",
+            )
+            (bin_dir / "who").write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            (bin_dir / "tmux").write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
+            for path in bin_dir.iterdir():
+                path.chmod(0o755)
+
+            env = os.environ.copy()
+            env["HOME"] = raw_tmp
+            env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
+            env["WB_PEERS"] = "trap|.*|"
+            env["WB_NETRATE_DELAY"] = "0"
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    f"source {SCRIPT}; __wb_paint; WB_FRAME_ON=1; WB_FRAME_INNER=78; WB_W=78; WB_ZW=78; __wb_network",
+                ],
+                env=env,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+        rendered = ANSI_RE.sub("", result.stdout).replace("\x06", "")
+        trap_line = next((l for l in rendered.splitlines() if "trap" in l), "")
+        self.assertIn("offline", trap_line)
+        self.assertNotIn("10.0.0.25", trap_line)
+
 
 if __name__ == "__main__":
     unittest.main()

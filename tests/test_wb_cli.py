@@ -59,6 +59,7 @@ class WbCliTests(unittest.TestCase):
     def test_help_lists_safe_commands(self) -> None:
         result = run_wb("help")
         self.assertEqual(result.returncode, 0)
+        self.assertIn("wb animate", result.stdout)
         self.assertIn("wb setup", result.stdout)
         self.assertIn("wb theme", result.stdout)
         self.assertIn("wb doctor", result.stdout)
@@ -85,18 +86,17 @@ class WbCliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("Unknown theme", result.stderr)
 
-    def test_setup_writes_name_banner_theme_and_sections(self) -> None:
+    def test_setup_writes_name_banner_theme_and_optional_labels(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:
             home = Path(raw_tmp)
             answers = (
                 "Alex\n"
                 "WORKBOX\n"
                 "green-phosphor\n"
-                "machine tmux ports\n"
                 "/tmp/custom-commands\n"
                 "api:8000 dashboard:6900\n"
+                "backups agents updater\n"
                 "Hermes local\n"
-                "/tmp/openclaw\n"
                 "/tmp/ports-baseline.txt\n"
             )
             result = run_wb("setup", input_text=answers, home=home)
@@ -105,12 +105,13 @@ class WbCliTests(unittest.TestCase):
             self.assertIn('WB_DISPLAY_NAME="Alex"', config)
             self.assertIn('WB_BANNER_TEXT="WORKBOX"', config)
             self.assertIn('WB_THEME="green-phosphor"', config)
-            self.assertIn('WB_SECTIONS="machine tmux ports"', config)
             self.assertIn('WB_CUSTOM_COMMANDS_FILE="/tmp/custom-commands"', config)
             self.assertIn('WB_SERVICE_PORTS="api:8000 dashboard:6900"', config)
+            self.assertIn('WB_AUTOMATION_LABEL="backups agents updater"', config)
             self.assertIn('WB_HERMES_LABEL="Hermes local"', config)
-            self.assertIn('WB_OPENCLAW_PATH="/tmp/openclaw"', config)
             self.assertIn('WB_PORT_BASELINE_FILE="/tmp/ports-baseline.txt"', config)
+            self.assertNotIn("WB_" + "SECTIONS", config)
+            self.assertNotIn("WB_" + "OPENCLAW_PATH", config)
 
     def test_doctor_reports_readiness_without_mutating(self) -> None:
         with tempfile.TemporaryDirectory() as raw_tmp:

@@ -6,6 +6,10 @@ This project can help a user understand listening ports, notice drift, and prepa
 
 Never close ports, change firewall rules, edit SSH settings, or block inbound traffic from this repo's current commands. A future mutating version needs a separate design, tests, explicit user approval, and rollback receipts. Default-deny firewall work belongs in that separate reviewed plan, not in shell startup.
 
+Welcome Board itself must not become a network surface: no daemon, no listening
+socket, no public tunnel, no web UI, and no automatic firewall or service
+mutation.
+
 ## Safe Flow
 
 1. **Scan**

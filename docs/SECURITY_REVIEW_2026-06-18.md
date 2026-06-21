@@ -573,7 +573,7 @@ diff --git a/welcome-board.sh b/welcome-board.sh
 +++ b/welcome-board.sh
 @@
    : "${WB_DISPLAY_NAME:=${USER:-friend}}"
-   : "${WB_BANNER_TEXT:=CLAMSHELL}"
+   : "${WB_BANNER_TEXT:=WORKSTATION}"
    : "${WB_THEME:=cyan-dark}"
    : "${WB_FRAME_INNER:=78}"
 +  [[ "$WB_FRAME_INNER" =~ ^[0-9]+$ ]] || WB_FRAME_INNER=78

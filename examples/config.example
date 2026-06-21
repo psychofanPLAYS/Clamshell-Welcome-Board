@@ -5,11 +5,24 @@
 # Your first name, shown in the time-aware greeting ("Good evening, Alex.").
 WB_DISPLAY_NAME="Alex"
 
-# Big banner word at the top. Rendered live from the built-in block font.
+# Big banner word at the top. Every install gets its own ASCII/banner art and
+# binary subtitle from this value. The public CLAMSHELL demo has a built-in
+# hand-tuned art/color style; other names use figlet/toilet when available.
 WB_BANNER_TEXT="WORKSTATION"
 
 # Visual theme. The shipped board is tuned for dark terminals.
 WB_THEME="cyan-dark"
+
+# Animation is on by default for interactive terminals. Set this to 0 in your
+# shell startup if you want a permanently static login render.
+# WB_ANIMATE=0
+# Optional intro timing overrides. Defaults target a quick roughly one-second
+# reveal with overlapping banner slices; increase only if you want a slower showpiece.
+# WB_ANIMATION_CHUNKS=7
+# WB_ANIMATION_LAUNCH_STEP=2
+# WB_ANIMATION_SLIDE_FRAMES=7
+# WB_ANIMATION_FRAME_DELAY_MS=30
+# WB_ANIMATION_BINARY_DELAY=0.002
 
 # Outer frame width in columns (78 fits an 80-col terminal cleanly).
 WB_FRAME_INNER="78"
@@ -18,12 +31,19 @@ WB_FRAME_INNER="78"
 # something is listening on its port. Names are shown verbatim — keep them short.
 WB_SERVICE_PORTS="ssh:22 webdash:6900 embedder:6901 reranker:6902 cockpit:36900"
 
-# NETWORK peers to probe, space-separated entries of  label|tailscale-match|probe-ip:port
+# NETWORK peers to probe, space-separated entries of  label|tailscale-match|probe-host:port
 #   - label         : shown in the row
 #   - tailscale-match: substring matched against `tailscale status` to read the IP/online state
-#   - probe-ip:port  : optional TCP probe; if it connects the peer shows "serving :port"
+#   - probe-host:port: optional TCP probe; if it connects the peer shows "serving :port"
 # Leave the probe empty (trailing |) to only report tailscale online/offline.
-WB_PEERS="laptop|laptop| server|server|10.0.0.20:6911"
+WB_PEERS="laptop|laptop| server|server|server.local:6911"
+
+# Startup-speed tuning for NETWORK. Defaults are intentionally short because
+# terminal login should never wait on Tailscale or an offline peer.
+# WB_TAILSCALE_TIMEOUT=0.45
+# WB_PEER_PROBE_TIMEOUT=0.2
+# WB_NETWORK_COMMAND_TIMEOUT=0.45
+# WB_NETRATE_DELAY=0.04
 
 # SECURITY baseline: saved set of reviewed LAN listeners. SECURITY warns when the
 # live set drifts from this file. Create/update it with:  wb ports snapshot
@@ -34,4 +54,4 @@ WB_PORT_BASELINE_FILE="$HOME/.local/state/welcome-board/ports-baseline.txt"
 WB_AUTOMATION_MATCH="oppy superbrain kenny darkfactory trading codex claude hermes ingest"
 
 # Optional label for the HERMES section header context (free text).
-WB_HERMES_LABEL="Hermes Agent · master-1-codex / master-2-local"
+WB_HERMES_LABEL="Hermes local helper"
