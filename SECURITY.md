@@ -21,6 +21,15 @@ Relevant examples:
 
 No firewall changes are implemented in this version.
 
+Welcome Board is user-local terminal software. It does not install a daemon,
+listen on a socket, expose a web UI, enable tunnels, or open ports. The
+installer copies files into user-owned paths and prints shell-startup lines for
+review instead of editing shell startup files itself.
+
+The `wb` helper refuses unexpected board script paths by default; set
+`WELCOME_BOARD_ALLOW_UNTRUSTED_BOARD_FILE=1` only for local development after
+reviewing the file.
+
 The port helpers are read-only:
 
 ```bash

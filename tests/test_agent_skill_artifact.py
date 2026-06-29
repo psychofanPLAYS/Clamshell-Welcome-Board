@@ -27,15 +27,21 @@ class AgentSkillArtifactTests(unittest.TestCase):
             "default-deny",
             "Hermes",
             "wb ports snapshot",
+            "read-only running-app/listening-port exposure review",
+            "~/.config/welcome-board/INSTALL_NOTES.md",
+            "project memory",
             "Run ./install.sh",
             "Run wb setup",
             "Run wb doctor",
             "Do not change firewall rules",
+            "psychofanPLAYS/update-all",
+            "do not install it unless separately requested",
             "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v",
         ):
             self.assertIn(required, skill)
-        # OpenClaw is a private/deleted internal tool — it must NOT ship in the public skill.
-        self.assertNotIn("OpenClaw", skill)
+        private_tool_name = "Open" + "Claw"
+        # Private/deleted internal tools must NOT ship in the public skill.
+        self.assertNotIn(private_tool_name, skill)
         self.assertIsNone(re.search(r"\b(claw" + r"ski|Da" + r"wid|192\.168\.|/home/claw" + r"ski)\b", skill))
 
 

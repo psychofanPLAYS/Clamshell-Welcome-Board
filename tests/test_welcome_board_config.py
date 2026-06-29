@@ -40,6 +40,17 @@ def _make_bin_dir(home: Path) -> Path:
         encoding="utf-8",
     )
 
+    # clamshell-ssh-sessions: deterministic structured SSH counter
+    (bin_dir / "clamshell-ssh-sessions").write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "${1:-}" = "summary" ] && [ "${2:-}" = "--format" ] && [ "${3:-}" = "env" ]; then\n'
+        "  printf 'SSH_TOTAL=3\\nSSH_ACTIVE=2\\nSSH_STALE=1\\nSSH_AUTO_REAPED_TODAY=4\\nSSH_TMUX=1\\nSSH_SHELL=1\\nSSH_PROTECTED=0\\nSSH_BUSY=0\\n'\n"
+        "  exit 0\n"
+        "fi\n"
+        "printf '2 active · 1 stale · 4 auto-reaped today\\n'\n",
+        encoding="utf-8",
+    )
+
     # ss: reports a few known ports so SERVICES can check them
     (bin_dir / "ss").write_text(
         "#!/usr/bin/env bash\n"
@@ -138,8 +149,10 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertNotIn("PRESSURE", rendered)
         self.assertNotIn("CLOCKS", rendered)
 
-        # ssh remote-logins row appears in NETWORK
-        self.assertIn("remote", rendered)
+        # ssh counter row appears in NETWORK with structured live/stale/reaped counts
+        self.assertIn("2 active", rendered)
+        self.assertIn("1 stale", rendered)
+        self.assertIn("4 auto-reaped today", rendered)
         # tmux row appears in NETWORK
         self.assertIn("tmux", rendered)
         # Hermes shortcuts use m1c / m2c shortcuts
@@ -186,6 +199,44 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertNotIn("\x1b]52", unsafe_rendered)
         self.assertNotIn("\x07", unsafe_rendered)
 
+    def test_clamshell_banner_uses_built_in_block_art(self) -> None:
+        """The public CLAMSHELL demo must keep the hand-tuned banner style."""
+        env = os.environ.copy()
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f"source {SCRIPT}; WB_BANNER_TEXT=CLAMSHELL; __wb_banner_art",
+            ],
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        self.assertIn("██████╗██╗", result.stdout)
+        self.assertIn("╚═════╝", result.stdout)
+
+    def test_configured_theme_changes_palette(self) -> None:
+        proc = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f"source {SCRIPT}; WB_THEME=cyan-dark; __wb_paint; printf '%s\\n' \"$WB_AC\"; __wb_banner_color_lines | head -1; WB_THEME=amber-terminal; __wb_paint; printf '%s\\n' \"$WB_AC\"; __wb_banner_color_lines | head -1",
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+
+        cyan_ac, cyan_banner, amber_ac, amber_banner = proc.stdout.splitlines()
+        self.assertNotEqual(cyan_ac, amber_ac)
+        self.assertNotEqual(cyan_banner, amber_banner)
+        self.assertIn("\x1b[38;5;81m", cyan_ac)
+        self.assertIn("\x1b[38;5;45m", cyan_banner)
+        self.assertIn("\x1b[38;5;214m", amber_ac)
+        self.assertIn("\x1b[38;5;220m", amber_banner)
+
     def test_new_section_headers_all_present_with_config(self) -> None:
         """Full render with a custom config still shows all 7 new section headers."""
         with tempfile.TemporaryDirectory() as raw_tmp:
@@ -206,8 +257,10 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertIn("webdash", rendered)
         self.assertNotIn("shim dash", rendered)
 
-        # ssh remote-logins row
-        self.assertIn("remote", rendered)
+        # ssh counter row
+        self.assertIn("2 active", rendered)
+        self.assertIn("1 stale", rendered)
+        self.assertIn("4 auto-reaped today", rendered)
 
         # Hermes shortcuts appear
         self.assertTrue(

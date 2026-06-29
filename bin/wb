@@ -124,7 +124,7 @@ wb_theme_set() {
 }
 
 wb_setup() {
-  local name banner theme sections custom_file service_ports baseline_file hermes_label openclaw_path
+  local name banner theme custom_file service_ports automation_label baseline_file hermes_label
   printf 'Display name [%s]: ' "${USER:-you}"
   read -r name
   name="${name:-${USER:-you}}"
@@ -142,21 +142,17 @@ wb_setup() {
     *) printf 'Unknown theme, using cyan-dark.\n'; theme="cyan-dark" ;;
   esac
 
-  printf 'Sections [machine services identity security health hermes tmux commands notes]: '
-  read -r sections
-  sections="${sections:-machine services identity security health hermes tmux commands notes}"
-
   printf 'Custom commands file [blank to skip]: '
   read -r custom_file
 
   printf 'Service ports to watch, name:port pairs [blank for auto]: '
   read -r service_ports
 
+  printf 'Automation label, for example "backups · agents · updater" [blank to skip]: '
+  read -r automation_label
+
   printf 'Hermes label [blank for auto/skip]: '
   read -r hermes_label
-
-  printf 'OpenClaw path [blank to auto-detect later]: '
-  read -r openclaw_path
 
   printf 'Port baseline file [~/.local/state/welcome-board/ports-baseline.txt]: '
   read -r baseline_file
@@ -166,11 +162,10 @@ wb_setup() {
     printf 'WB_DISPLAY_NAME=%s\n' "$(wb_config_quote "$name")"
     printf 'WB_BANNER_TEXT=%s\n' "$(wb_config_quote "$banner")"
     printf 'WB_THEME=%s\n' "$(wb_config_quote "$theme")"
-    printf 'WB_SECTIONS=%s\n' "$(wb_config_quote "$sections")"
     [ -n "$custom_file" ] && printf 'WB_CUSTOM_COMMANDS_FILE=%s\n' "$(wb_config_quote "$custom_file")"
     [ -n "$service_ports" ] && printf 'WB_SERVICE_PORTS=%s\n' "$(wb_config_quote "$service_ports")"
+    [ -n "$automation_label" ] && printf 'WB_AUTOMATION_LABEL=%s\n' "$(wb_config_quote "$automation_label")"
     [ -n "$hermes_label" ] && printf 'WB_HERMES_LABEL=%s\n' "$(wb_config_quote "$hermes_label")"
-    [ -n "$openclaw_path" ] && printf 'WB_OPENCLAW_PATH=%s\n' "$(wb_config_quote "$openclaw_path")"
     [ -n "$baseline_file" ] && printf 'WB_PORT_BASELINE_FILE=%s\n' "$(wb_config_quote "$baseline_file")"
   } > "$WB_CONFIG"
 
@@ -179,9 +174,7 @@ wb_setup() {
 }
 
 wb_sections() {
-  local sections
-  sections="$(wb_config_get WB_SECTIONS)"
-  printf 'Sections: %s\n' "${sections:-machine services identity security health hermes tmux commands notes}"
+  printf 'Sections: MACHINE NETWORK SECURITY SERVICES AUTOMATION HERMES COMMANDS\n'
 }
 
 wb_doctor_cmd() {
@@ -276,7 +269,7 @@ wb_ports_short_name() {
     6909) printf 'local app' ;;
     6911) printf 'Kenny LM' ;;
     6912) printf 'Hermes API' ;;
-    6913) printf 'Kenny gate' ;;
+    6913) printf 'local AI gate' ;;
     6915) printf 'Hermes dash' ;;
     6916) printf 'Hermes' ;;
     6917) printf 'OR guard' ;;
@@ -410,7 +403,7 @@ wb_render() {
   export WELCOME_BOARD_CONFIG="$WB_CONFIG"
   # shellcheck source=/dev/null
   source "$WB_BOARD_FILE"
-  clamboard
+  welcomeBoard
 }
 
 cmd="${1:-render}"

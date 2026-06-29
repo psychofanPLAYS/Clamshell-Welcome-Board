@@ -11,10 +11,9 @@ class BashCompatibilityTests(unittest.TestCase):
     def test_public_shell_scripts_avoid_bash4_only_constructs(self) -> None:
         checked = [
             REPO_ROOT / "welcome-board.sh",
-            REPO_ROOT / "bin" / "wb",
-            REPO_ROOT / "bin" / "welcomeboard",
             REPO_ROOT / "install.sh",
         ]
+        checked.extend(sorted((REPO_ROOT / "bin").glob("*")))
         forbidden = ["local -n", "declare -A", "local -A", "mapfile", "readarray"]
 
         for path in checked:

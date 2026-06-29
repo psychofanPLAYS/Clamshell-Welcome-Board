@@ -10,6 +10,7 @@ mkdir -p "$DIR/bin"
 
 cat > "$DIR/config" <<'CFG'
 WB_DISPLAY_NAME="Alex"
+WB_BANNER_TEXT="CLAMSHELL"
 WB_SERVICE_PORTS="ssh:22 webdash:6900 embedder:6901 reranker:6902 vector-db:6333 gateway:6913 api:6916 cockpit:36900"
 WB_PEERS="laptop|laptop|10.0.0.15:8080 server|server|10.0.0.20:6911"
 WB_AUTOMATION_LABEL="ingest · backups · agents"
@@ -19,12 +20,12 @@ CFG
 cat > "$DIR/bin/hostname" <<'E'
 #!/usr/bin/env bash
 [ "${1:-}" = "-I" ] && { printf '10.0.0.10\n'; exit 0; }
-printf 'workstation\n'
+printf 'clamshell\n'
 E
 cat > "$DIR/bin/tailscale" <<'E'
 #!/usr/bin/env bash
 cat <<'EOF'
-10.0.0.10 workstation user linux -
+10.0.0.10 clamshell user linux -
 10.0.0.15 laptop user macOS active
 10.0.0.20 server user linux active
 EOF

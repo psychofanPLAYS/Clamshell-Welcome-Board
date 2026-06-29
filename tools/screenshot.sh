@@ -5,10 +5,18 @@ set -euo pipefail
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${1:-$HERE/docs/screenshots/welcome-board.png}"
 TMPH="$(mktemp "$HERE/docs/screenshots/board-shot.XXXXXX.html")"
-cleanup() { rm -f "$TMPH"; }
+TMPD="$(mktemp -d "${TMPDIR:-/tmp}/welcome-board-shot.XXXXXX")"
+cleanup() {
+  rm -f "$TMPH"
+  case "$TMPD" in
+    "${TMPDIR:-/tmp}"/welcome-board-shot.*) rm -rf "$TMPD" ;;
+  esac
+}
 trap cleanup EXIT
+bash "$HERE/tools/showcase-env.sh" "$TMPD/showcase"
+mkdir -p "$TMPD/home"
 # render board with colour (board emits ANSI regardless of TTY), strip the dim sentinel
-bash "$HERE/welcome-board.sh" 2>/dev/null \
+HOME="$TMPD/home" WELCOME_BOARD_CONFIG="$TMPD/showcase/config" PATH="$TMPD/showcase/bin:$PATH" bash "$HERE/welcome-board.sh" 2>/dev/null \
   | python3 "$HERE/tools/redact-network-ips.py" \
   | tr -d '\006' \
   | python3 "$HERE/tools/ansi2html.py" > "$TMPH"

@@ -26,7 +26,7 @@ def _bounded_env_int(name: str, default: int, minimum: int, maximum: int) -> int
     return max(minimum, min(value, maximum))
 
 
-STATE_DIR = Path.home() / ".AGENTS" / ".state"
+STATE_DIR = Path.home() / ".local" / "state" / "welcome-board"
 STATE_PATH = Path(
     os.environ.get(
         "CODEX_CLAUDE_UPDATE_STATE",
@@ -36,7 +36,7 @@ STATE_PATH = Path(
 LOG_PATH = Path(
     os.environ.get(
         "CODEX_CLAUDE_UPDATE_LOG",
-        str(Path.home() / ".AGENTS" / "logs" / "codex-claude-daily-update.log"),
+        str(STATE_DIR / "codex-claude-daily-update.log"),
     )
 )
 HISTORY_DAYS = _bounded_env_int("CODEX_CLAUDE_UPDATE_HISTORY_DAYS", 7, 1, 30)

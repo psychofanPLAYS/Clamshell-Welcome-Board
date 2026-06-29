@@ -8,7 +8,6 @@ small SDK-style contract so humans and AI agents can extend it safely.
 Every section should have:
 
 - one render function named `__wb_<section>()`
-- one config token in `WB_SECTIONS`
 - graceful behavior when tools are missing
 - a focused test or render smoke
 - no slow unbounded network calls
@@ -62,11 +61,10 @@ AGENTS|cd ~/.AGENTS|open operator notes
 Then set:
 
 ```bash
-WB_SECTIONS="machine services security tmux custom notes"
 WB_CUSTOM_COMMANDS_FILE="$HOME/.config/welcome-board/custom-commands"
 ```
 
-The board renders this as the `CUSTOM` section.
+The board renders these rows inside `COMMANDS`.
 
 ## Adding Personal Integrations
 
@@ -74,12 +72,11 @@ Optional integrations belong in config:
 
 ```bash
 WB_HERMES_LABEL="Hermes local helper"
-WB_OPENCLAW_PATH="$HOME/_openCLAW/_OPENCLAW-HOME"
 WB_SERVICE_PORTS="webdash:6900 app:3000"
 ```
 
 The installer or AI assistant should ask before adding these. Do not assume every
-user has Hermes, OpenClaw, tmux aliases, or the same service ports.
+user has Hermes, tmux aliases, local AI endpoints, or the same service ports.
 
 ## Port Baseline
 

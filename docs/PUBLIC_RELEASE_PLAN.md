@@ -10,8 +10,8 @@ This repo started as a personal shell board. The public version needs a config-f
 - Setup asks for a color theme and offers a few choices.
 - Commands exist: `welcomeboard`, `wb`, `wb help`, `wb theme`, `wb doctor`, and `wb ports snapshot`.
 - Support command exists: `wb doctor`.
-- Setup asks which sections to enable and defaults to `machine services identity security health hermes tmux commands notes`.
-- Machine, services, grounded identity, curated security, health, Hermes, tmux, commands, and notes sections are implemented.
+- Setup explains the rendered sections instead of writing stale ignored section flags.
+- Machine, network, local AI, curated security, services, automation, Hermes, and commands sections are implemented.
 - Port lockdown is available as safe read-only scan/explain/plan/snapshot commands. Apply/rollback are intentionally not implemented in this version.
 - Future LLMs know how to add sections safely through `docs/SECTION_SDK.md`.
 - Repo is safe to make public only after personal defaults are removed.
@@ -41,13 +41,12 @@ The current single-file `welcome-board.sh` can stay during the transition, but p
 WB_DISPLAY_NAME="Alex"
 WB_BANNER_TEXT="WORKSTATION"
 WB_THEME="cyan-dark"
-WB_SECTIONS="machine services identity security health hermes tmux commands notes"
 WELCOME_BOARD_MACHINE_HISTORY="$HOME/.local/state/welcome-board/machine-series.tsv"
 WB_PORT_BASELINE_FILE="$HOME/.local/state/welcome-board/ports-baseline.txt"
 WB_SERVICE_PORTS="ssh:22 webdash:6900 embedder:6901 reranker:6902"
 WB_CUSTOM_COMMANDS_FILE="$HOME/.config/welcome-board/custom-commands"
 WB_HERMES_LABEL="Hermes local helper"
-WB_OPENCLAW_PATH="$HOME/OpenClaw"
+WB_AUTOMATION_LABEL="backups · agents · updater"
 ```
 
 ## Installer Shape
@@ -59,12 +58,12 @@ WB_OPENCLAW_PATH="$HOME/OpenClaw"
 3. Ask display name.
 4. Ask banner text.
 5. Ask theme.
-6. Ask enabled board sections.
-7. Ask tmux workflow, custom commands, watched service ports, Hermes usage, OpenClaw usage, and port baseline choice.
+6. Explain enabled board sections.
+7. Ask tmux workflow, custom commands, watched service ports, optional Claude Code + Codex updater cron, Hermes usage, and port baseline choice.
 8. Install `wb` into `~/.local/bin`.
 9. Install config under `~/.config/welcome-board/config`.
 10. Print exact shell hook lines.
-11. Run a render preview.
+11. Run a render preview and check centering, color coding, and custom banner/binary subtitle alignment.
 
 ## Tmux Section
 

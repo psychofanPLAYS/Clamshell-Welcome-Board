@@ -20,6 +20,7 @@ class PublicArtifactsTests(unittest.TestCase):
         for expected in ("MACHINE", "NETWORK", "SECURITY", "SERVICES",
                          "AUTOMATION", "HERMES", "COMMANDS", "CPU", "tmux"):
             self.assertIn(expected, demo)
+        self.assertNotIn("LOCAL AI", demo)
         for stale_heading in ("PRESSURE", "CLOCKS", "MEMORY / DISK", "YOU ARE ON"):
             self.assertNotIn(stale_heading, demo)
         forbidden_values = (

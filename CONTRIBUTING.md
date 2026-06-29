@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve Clamshell Welcome Board.
+Thanks for helping improve Welcome Board.
 
 This project is a local-first shell tool, so changes should be boring in the best way: fast startup, graceful fallbacks, clean terminal output, and no surprise system changes.
 

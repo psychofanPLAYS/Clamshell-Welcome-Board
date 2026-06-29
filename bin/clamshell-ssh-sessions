@@ -1,0 +1,395 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+min_idle=15
+dry_run=0
+force=0
+mode="${1:-list}"
+format="text"
+state_file="${CLAMSHELL_SSH_SESSIONS_STATE:-$HOME/.local/state/welcome-board/ssh-reap.tsv}"
+[ "$#" -gt 0 ] && shift || true
+
+usage() {
+  cat <<'EOF'
+clamshell-ssh-sessions - inspect and safely reap stale SSH ttys
+
+Usage:
+  clamshell-ssh-sessions list
+  clamshell-ssh-sessions summary [--format text|env]
+  clamshell-ssh-sessions reap [--dry-run] [--force] [--min-idle MIN]
+
+Safe reap is intentionally conservative: idle time alone is never enough.
+It only closes SSH ttys with stale/broken connection evidence. Any live SSH
+connection is skipped. It also protects Codex, Claude, Hermes, non-shell work,
+and tmux sessions.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --dry-run) dry_run=1 ;;
+    --force) force=1 ;;
+    --min-idle)
+      shift
+      min_idle="${1:-15}"
+      ;;
+    --format)
+      shift
+      format="${1:-text}"
+      ;;
+    -h|--help|help)
+      usage
+      exit 0
+      ;;
+    *)
+      printf 'unknown option: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift || true
+done
+
+case "$min_idle" in
+  ''|*[!0-9]*) min_idle=15 ;;
+esac
+case "$format" in
+  text|env) ;;
+  *)
+    printf 'unknown summary format: %s\n' "$format" >&2
+    exit 2
+    ;;
+esac
+
+current_tty="$(tty 2>/dev/null | sed 's#/dev/##' || true)"
+
+safe_field() {
+  local s="${1-}"
+  s="${s//$'\r'/ }"
+  s="${s//$'\n'/ }"
+  s="${s//$'\t'/ }"
+  s="${s//$'\e'/}"
+  LC_ALL=C printf '%s' "$s" | tr -d '\000-\010\013\014\016-\037\177'
+}
+
+idle_minutes() {
+  local raw="${1:-.}" hh mm
+  case "$raw" in
+    .) printf '0' ;;
+    old) printf '1440' ;;
+    *:*)
+      hh="${raw%%:*}"
+      mm="${raw##*:}"
+      case "$hh$mm" in *[!0-9]*|'') printf '0' ;; *) printf '%s' "$((10#$hh * 60 + 10#$mm))" ;; esac
+      ;;
+    *[!0-9]*|'') printf '0' ;;
+    *) printf '%s' "$raw" ;;
+  esac
+}
+
+tty_processes() {
+  local line="$1"
+  ps -t "$line" -o pid=,stat=,comm=,args= 2>/dev/null || true
+}
+
+classify_tty() {
+  local line="$1" procs non_shell=0 tmux_client=0 protected=0 busy=0 pid stat comm args
+  procs="$(tty_processes "$line")"
+  while read -r pid stat comm args; do
+    [ -n "${pid:-}" ] || continue
+    case "$comm $args" in
+      *codex*|*claude*|*hermes*) protected=1 ;;
+      *"tmux: client"*|*"tmux attach"*|*"tmux attach-session"*) tmux_client=1 ;;
+    esac
+    case "$comm" in
+      bash|sh|zsh|fish|sshd|login) ;;
+      tmux:|tmux) ;;
+      *) non_shell=1 ;;
+    esac
+    case "$stat" in *+) busy=1 ;; esac
+  done <<< "$procs"
+
+  if [ "$protected" = 1 ]; then
+    printf 'protected-agent'
+  elif [ "$tmux_client" = 1 ]; then
+    printf 'tmux-client'
+  elif [ "$non_shell" = 1 ] || [ "$busy" = 1 ]; then
+    printf 'protected-work'
+  else
+    printf 'shell'
+  fi
+}
+
+sshd_pids_for_tty() {
+  local line="$1" login_pid="${2:-}"
+  {
+    if [[ "$login_pid" =~ ^[0-9]+$ ]]; then
+      ps -p "$login_pid" -o pid=,comm=,args= 2>/dev/null | awk '$0 ~ /sshd/ { print $1 }'
+    fi
+    ps -eo pid=,comm=,args= 2>/dev/null |
+      awk -v tty="$line" '$0 ~ /sshd/ && index($0, "@" tty) { print $1 }'
+  } | awk 'NF && !seen[$1]++'
+}
+
+ssh_state_for_source() {
+  local src="$1" row state local_addr peer_addr found_broken=0
+  while read -r row; do
+    [ -n "$row" ] || continue
+    set -- $row
+    state="${1:-}"
+    local_addr="${4:-}"
+    peer_addr="${5:-}"
+    case "$local_addr" in *:22|*:ssh) ;; *) continue ;; esac
+    case "$peer_addr" in "$src":*|"[$src]":*) ;; *) continue ;; esac
+    case "$state" in
+      ESTAB) printf 'live-source'; return ;;
+      CLOSE-WAIT|FIN-WAIT-1|FIN-WAIT-2|CLOSING|LAST-ACK|TIME-WAIT|CLOSED) found_broken=1 ;;
+    esac
+  done < <(ss -Htn 2>/dev/null || true)
+
+  if [ "$found_broken" = 1 ]; then
+    printf 'broken-source'
+  else
+    printf 'unknown-source'
+  fi
+}
+
+ssh_state_for_pids() {
+  local pids="$1" row state pid found=0 found_broken=0
+  [ -n "$pids" ] || { printf 'no-ssh-owner'; return; }
+
+  while read -r row; do
+    [ -n "$row" ] || continue
+    for pid in $pids; do
+      case "$row" in
+        *"pid=$pid,"*)
+          found=1
+          state="${row%% *}"
+          case "$state" in
+            ESTAB) printf 'live-pid'; return ;;
+            CLOSE-WAIT|FIN-WAIT-1|FIN-WAIT-2|CLOSING|LAST-ACK|TIME-WAIT|CLOSED) found_broken=1 ;;
+          esac
+          ;;
+      esac
+    done
+  done < <(ss -Htnp 2>/dev/null || true)
+
+  if [ "$found_broken" = 1 ]; then
+    printf 'broken-pid'
+  elif [ "$found" = 1 ]; then
+    printf 'unknown-pid'
+  else
+    printf 'no-live-ssh'
+  fi
+}
+
+connection_state() {
+  local line="$1" src="$2" login_pid="$3" pids source_state pid_state
+  pids="$(sshd_pids_for_tty "$line" "$login_pid" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+  source_state="$(ssh_state_for_source "$src")"
+  pid_state="$(ssh_state_for_pids "$pids")"
+
+  case "$source_state:$pid_state" in
+    live-source:*|*:live-pid) printf 'live' ;;
+    broken-source:*|*:broken-pid) printf 'broken' ;;
+    unknown-source:no-live-ssh) printf 'stale-no-live-ssh' ;;
+    *:no-ssh-owner) printf 'no-ssh-owner' ;;
+    *) printf 'unknown' ;;
+  esac
+}
+
+remote_rows() {
+  who -u 2>/dev/null | while read -r user line date time idle pid rest; do
+    src="${rest//[()]/}"
+    line="$(safe_field "$line")"
+    src="$(safe_field "$src")"
+    case "$line" in pts/*) ;; *) continue ;; esac
+    case "$src" in
+      ''|tmux*|:*|seat*|login*) continue ;;
+    esac
+    case "$src" in
+      *.*.*.*) ;;
+      *) continue ;;
+    esac
+    idle_m="$(idle_minutes "$idle")"
+    class="$(classify_tty "$line")"
+    state="$(connection_state "$line" "$src" "$pid")"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$line" "$src" "$idle" "$idle_m" "$pid" "$class" "$state"
+  done
+}
+
+auto_reaped_today() {
+  local today count=0
+  today="$(date +%Y-%m-%d 2>/dev/null || true)"
+  [ -n "$today" ] || { printf '0'; return; }
+  [ -r "$state_file" ] || { printf '0'; return; }
+  count="$(awk -F'\t' -v day="$today" '$1 ~ "^" day && $4=="closed" {n++} END{print n+0}' "$state_file" 2>/dev/null || printf '0')"
+  printf '%s' "${count:-0}"
+}
+
+ssh_source_live_in_snapshot() {
+  local src="$1" snapshot="$2"
+  awk -v src="$src" '
+    {
+      state=$1
+      local_addr=$4
+      peer_addr=$5
+      if (local_addr !~ /:(22|ssh)$/) next
+      if (peer_addr == src || peer_addr ~ ("^" src ":") || peer_addr ~ ("^\\[" src "\\]:")) {
+        if (state == "ESTAB") found=1
+      }
+    }
+    END { exit found ? 0 : 1 }
+  ' <<< "$snapshot"
+}
+
+summary_env_fast() {
+  local total=0 active=0 stale=0 reaped snapshot user line date time idle pid rest src
+  snapshot="$(ss -Htn 2>/dev/null || true)"
+  while read -r user line date time idle pid rest; do
+    src="${rest//[()]/}"
+    line="$(safe_field "$line")"
+    src="$(safe_field "$src")"
+    case "$line" in pts/*) ;; *) continue ;; esac
+    case "$src" in
+      ''|tmux*|:*|seat*|login*) continue ;;
+    esac
+    case "$src" in
+      *.*.*.*) ;;
+      *) continue ;;
+    esac
+    total=$((total + 1))
+    if ssh_source_live_in_snapshot "$src" "$snapshot"; then
+      active=$((active + 1))
+    else
+      stale=$((stale + 1))
+    fi
+  done < <(who -u 2>/dev/null || true)
+  reaped="$(auto_reaped_today)"
+  printf 'SSH_TOTAL=%s\n' "$total"
+  printf 'SSH_ACTIVE=%s\n' "$active"
+  printf 'SSH_STALE=%s\n' "$stale"
+  printf 'SSH_AUTO_REAPED_TODAY=%s\n' "$reaped"
+  printf 'SSH_TMUX=0\n'
+  printf 'SSH_SHELL=0\n'
+  printf 'SSH_PROTECTED=0\n'
+  printf 'SSH_BUSY=0\n'
+}
+
+record_reap() {
+  local line="$1" src="$2" state="$3" dir ts tmp
+  dir="$(dirname -- "$state_file")"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  ts="$(date --iso-8601=seconds 2>/dev/null || date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || printf unknown)"
+  tmp="$(mktemp "${state_file}.XXXXXX" 2>/dev/null || true)"
+  if [ -n "$tmp" ]; then
+    [ -r "$state_file" ] && tail -n 1000 "$state_file" > "$tmp" 2>/dev/null || : > "$tmp"
+    printf '%s\t%s\t%s\tclosed\t%s\n' "$ts" "$(safe_field "$line")" "$(safe_field "$src")" "$(safe_field "$state")" >> "$tmp"
+    mv "$tmp" "$state_file" 2>/dev/null || rm -f "$tmp"
+  else
+    printf '%s\t%s\t%s\tclosed\t%s\n' "$ts" "$(safe_field "$line")" "$(safe_field "$src")" "$(safe_field "$state")" >> "$state_file" 2>/dev/null || true
+  fi
+}
+
+summary() {
+  local total=0 active=0 shell=0 tmux=0 stale=0 protected=0 busy=0 reaped line src idle idle_m pid class state
+  if [ "$format" = "env" ]; then
+    summary_env_fast
+    return 0
+  fi
+  while IFS=$'\t' read -r line src idle idle_m pid class state; do
+    [ -n "$line" ] || continue
+    total=$((total + 1))
+    case "$state" in
+      live) active=$((active + 1)) ;;
+      broken|stale-no-live-ssh) stale=$((stale + 1)) ;;
+    esac
+    case "$class" in
+      tmux-client) tmux=$((tmux + 1)) ;;
+      protected-agent) protected=$((protected + 1)) ;;
+      protected-work) busy=$((busy + 1)) ;;
+      *) shell=$((shell + 1)) ;;
+    esac
+  done < <(remote_rows)
+  reaped="$(auto_reaped_today)"
+  printf '%s active · %s stale · %s auto-reaped today' "$active" "$stale" "$reaped"
+  [ "$tmux" -gt 0 ] && printf ' · %s tmux' "$tmux"
+  [ "$protected" -gt 0 ] && printf ' · %s protected' "$protected"
+  [ "$busy" -gt 0 ] && printf ' · %s busy' "$busy"
+  printf '\n'
+}
+
+list_sessions() {
+  printf '%-8s %-15s %-7s %-5s %-16s %-18s %s\n' LINE FROM IDLE MIN CLASS SSH NOTE
+  while IFS=$'\t' read -r line src idle idle_m pid class state; do
+    [ -n "$line" ] || continue
+    note=""
+    [ "$line" = "$current_tty" ] && note="this session"
+    printf '%-8s %-15s %-7s %-5s %-16s %-18s %s\n' "$line" "$src" "$idle" "$idle_m" "$class" "$state" "$note"
+  done < <(remote_rows)
+}
+
+close_ssh_owner_for_tty() {
+  local line="$1" login_pid="$2" pids pid
+  pids="$(sshd_pids_for_tty "$line" "$login_pid")"
+  [ -n "$pids" ] || return 1
+  for pid in $pids; do
+    kill -TERM "$pid" 2>/dev/null || true
+  done
+}
+
+reap_sessions() {
+  local closed=0 skipped=0 line src idle idle_m pid class state action
+  while IFS=$'\t' read -r line src idle idle_m pid class state; do
+    [ -n "$line" ] || continue
+    action=""
+    if [ "$line" = "$current_tty" ]; then
+      action="skip-current"
+    elif [ "$state" = "live" ]; then
+      action="skip-live-ssh"
+    elif [ "$class" = "tmux-client" ]; then
+      action="manual-review-tmux-client"
+    elif [ "$class" = "protected-agent" ] || [ "$class" = "protected-work" ]; then
+      action="skip-protected"
+    elif [ "$state" = "no-ssh-owner" ] || [ "$state" = "unknown" ]; then
+      action="skip-no-stale-proof"
+    elif [ "$force" != 1 ] && [ "$idle_m" -lt "$min_idle" ] 2>/dev/null; then
+      action="skip-not-idle"
+    elif [ "$state" = "broken" ] || [ "$state" = "stale-no-live-ssh" ]; then
+      action="close-stale-ssh"
+    else
+      action="skip-unknown"
+    fi
+
+    if [ "$action" = "close-stale-ssh" ]; then
+      if [ "$dry_run" = 1 ]; then
+        printf 'DRY-RUN close %-8s from %-15s idle=%s class=%s ssh=%s\n' "$line" "$src" "$idle" "$class" "$state"
+      else
+        printf 'closing stale ssh %-8s from %-15s idle=%s class=%s ssh=%s\n' "$line" "$src" "$idle" "$class" "$state"
+        close_ssh_owner_for_tty "$line" "$pid" || true
+        record_reap "$line" "$src" "$state"
+      fi
+      closed=$((closed + 1))
+    else
+      printf '%-19s %-8s from %-15s idle=%s class=%s ssh=%s\n' "$action" "$line" "$src" "$idle" "$class" "$state"
+      skipped=$((skipped + 1))
+    fi
+  done < <(remote_rows)
+  if [ "$dry_run" = 1 ]; then
+    printf 'dry-run complete: %s stale ssh candidate(s), %s skipped\n' "$closed" "$skipped"
+  else
+    printf 'reap complete: %s stale ssh connection(s) closed, %s skipped\n' "$closed" "$skipped"
+  fi
+}
+
+case "$mode" in
+  list) list_sessions ;;
+  summary) summary ;;
+  reap) reap_sessions ;;
+  -h|--help|help) usage ;;
+  *)
+    printf 'unknown mode: %s\n' "$mode" >&2
+    usage >&2
+    exit 2
+    ;;
+esac

@@ -10,7 +10,7 @@ Use this guide when Codex, Claude, or another AI agent edits this repo.
 - Add config instead of hardcoding one user's machine names, IPs, paths, or aliases.
 - Do not mutate firewall rules, SSH settings, system services, or login shell files without showing the user the exact change first.
 - Do not add a new section unless it can fail gracefully.
-- Do not invent Hermes, OpenClaw, tmux, path, host, or port facts. Ask and configure them.
+- Do not invent Hermes, tmux, local AI, path, host, or port facts. Ask and configure them.
 
 For the section contract, custom command format, graph rules, and personalization examples, read [SECTION_SDK.md](SECTION_SDK.md).
 
@@ -37,9 +37,8 @@ Do not add explanatory row labels after the graph. Section headers provide conte
 
 1. Add a probe function that returns plain values.
 2. Add a render function that accepts missing values.
-3. Gate the section behind config.
-4. Add a test or smoke render.
-5. Run:
+3. Add a test or smoke render.
+4. Run:
 
 ```bash
 bash -n welcome-board.sh
