@@ -13,17 +13,6 @@ WB_BANNER_TEXT="WORKSTATION"
 # Visual theme. The shipped board is tuned for dark terminals.
 WB_THEME="cyan-dark"
 
-# Animation is on by default for interactive terminals. Set this to 0 in your
-# shell startup if you want a permanently static login render.
-# WB_ANIMATE=0
-# Optional intro timing overrides. Defaults target a quick roughly one-second
-# reveal with overlapping banner slices; increase only if you want a slower showpiece.
-# WB_ANIMATION_CHUNKS=7
-# WB_ANIMATION_LAUNCH_STEP=2
-# WB_ANIMATION_SLIDE_FRAMES=7
-# WB_ANIMATION_FRAME_DELAY_MS=30
-# WB_ANIMATION_BINARY_DELAY=0.002
-
 # Outer frame width in columns (78 fits an 80-col terminal cleanly).
 WB_FRAME_INNER="78"
 

@@ -97,7 +97,6 @@ Run `wb setup` for an interactive walk-through of the same keys.
 
 ```bash
 wb                     # reprint the board
-wb animate             # play the centered showpiece animation
 welcomeBoard           # helper available after shell startup sources the board
 welcomeHelp            # full command reference after shell startup
 hkeys                  # reprint just the agent-shortcuts box
@@ -105,16 +104,6 @@ wb doctor              # read-only install/health check
 wb ports explain       # plain-English review of listening ports (read-only)
 wb ports snapshot      # save the reviewed baseline SECURITY warns against
 ```
-
----
-
-## The animation
-
-![Welcome board — slam-in animation](docs/screenshots/welcome-board.gif)
-
-`wb animate` reveals the configured banner in a fast right-to-left domino slam, then decodes the binary subtitle while the board body preloads in the background. The default login render uses this roughly one-second intro unless you turn it off. During startup, typed characters are hidden until the terminal prompt is ready so early keystrokes do not collide with the board.
-
-After a few animated starts, the board may show a temporary centered `1 / 2 / 3` quick-settings box, styled like the Claude/Codex update notice. It lets you keep animation, turn it off, or ask later. Anything else is ignored and the box erases itself. Regenerate the README GIF with [tools/demo.tape](tools/demo.tape) (via [vhs](https://github.com/charmbracelet/vhs)), then run [tools/freeze-gif-final-frame.py](tools/freeze-gif-final-frame.py) so the final board holds long enough to read.
 
 ## Optional updater cron
 

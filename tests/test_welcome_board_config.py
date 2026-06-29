@@ -237,40 +237,6 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertIn("\x1b[38;5;214m", amber_ac)
         self.assertIn("\x1b[38;5;220m", amber_banner)
 
-    def test_config_loads_animation_timing_overrides(self) -> None:
-        with tempfile.TemporaryDirectory() as raw_tmp:
-            home = Path(raw_tmp)
-            config = home / ".config" / "welcome-board" / "config"
-            config.parent.mkdir(parents=True, exist_ok=True)
-            config.write_text(
-                "\n".join([
-                    "WB_ANIMATION_CHUNKS=5",
-                    "WB_ANIMATION_LAUNCH_STEP=3",
-                    "WB_ANIMATION_SLIDE_FRAMES=8",
-                    "WB_ANIMATION_FRAME_DELAY_MS=9",
-                    "WB_ANIMATION_BINARY_DELAY=0.001",
-                    "",
-                ]),
-                encoding="utf-8",
-            )
-
-            env = os.environ.copy()
-            env["HOME"] = str(home)
-            env["WELCOME_BOARD_CONFIG"] = str(config)
-            proc = subprocess.run(
-                [
-                    "bash",
-                    "-c",
-                    f"source {SCRIPT}; __wb_load_config; printf '%s %s %s %s %s\\n' \"$WB_ANIMATION_CHUNKS\" \"$WB_ANIMATION_LAUNCH_STEP\" \"$WB_ANIMATION_SLIDE_FRAMES\" \"$WB_ANIMATION_FRAME_DELAY_MS\" \"$WB_ANIMATION_BINARY_DELAY\"",
-                ],
-                env=env,
-                text=True,
-                capture_output=True,
-                check=True,
-            )
-
-        self.assertEqual(proc.stdout.strip(), "5 3 8 9 0.001")
-
     def test_new_section_headers_all_present_with_config(self) -> None:
         """Full render with a custom config still shows all 7 new section headers."""
         with tempfile.TemporaryDirectory() as raw_tmp:

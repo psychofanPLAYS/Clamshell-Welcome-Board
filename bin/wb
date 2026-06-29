@@ -25,7 +25,6 @@ wb - terminal welcome board helper
 
 Usage:
   wb                 Render the board
-  wb animate         Render the board with the banner animation
   wb help            Show this help
   wb setup           Ask basic questions and write config
   wb theme           Show available themes
@@ -401,21 +400,15 @@ EOF
 }
 
 wb_render() {
-  local animate="${1:-0}"
   export WELCOME_BOARD_CONFIG="$WB_CONFIG"
   # shellcheck source=/dev/null
   source "$WB_BOARD_FILE"
-  if [ "$animate" = 1 ]; then
-    welcomeBoard --animate
-  else
-    welcomeBoard
-  fi
+  welcomeBoard
 }
 
 cmd="${1:-render}"
 case "$cmd" in
   render) wb_render ;;
-  animate) wb_render 1 ;;
   help|-h|--help) wb_usage ;;
   setup) wb_setup ;;
   doctor) wb_doctor ;;

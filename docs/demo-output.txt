@@ -70,7 +70,7 @@
   ├─ COMMANDS ───────────────────────────────────────────────────────────────────┤
   │                                                                              │
   │ update    update-all system + AI CLIs   restart reload shell                 │
-  │ board     wb reprint   wb animate showpiece   welcomeHelp all commands       │
+  │ board     wb reprint   welcomeHelp all commands                              │
   │ tmux      tmux list  tmux 2 join  tmux new -s work  kill 1 2  detach C-b d   │
   │ network   ssh-sessions who's on  ssh-reap kill ghosts  wb ports explain      │
   └──────────────────────────────────────────────────────────────────────────────┘

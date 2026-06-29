@@ -79,7 +79,7 @@ checklist as it works, and leave exact next actions before stopping.
 ## Checklist
 
 - [ ] Read README.md, SECURITY.md, docs/PORT_SECURITY_MODEL.md, docs/SECTION_SDK.md, and docs/LLM_EXTENSION_GUIDE.md.
-- [ ] Ask for display name, banner text, theme, services, peers, custom commands, updater-cron choice, animation preference, and Hermes usage.
+- [ ] Ask for display name, banner text, theme, services, peers, custom commands, updater-cron choice, and Hermes usage.
 - [ ] Confirm shell-startup lines before editing any shell startup file.
 - [ ] Run ./install.sh and record whether the optional Claude Code + Codex updater cron was installed or skipped.
 - [ ] Run wb setup with the user's chosen values.
@@ -136,9 +136,8 @@ printf '  %s/wb setup\n\n' "$BIN_DIR"
 printf 'Add these lines to your shell startup file after reviewing them:\n\n'
 board_file="$DATA_DIR/welcome-board.sh"
 updater_file="$AGENT_BIN_DIR/codex-claude-daily-update"
-printf '[[ $- == *i* ]] && [ -f %s ] && WELCOME_BOARD_DEFER_NUDGE=1 source %s\n' "$(shell_quote "$board_file")" "$(shell_quote "$board_file")"
+printf '[[ $- == *i* ]] && [ -f %s ] && source %s\n' "$(shell_quote "$board_file")" "$(shell_quote "$board_file")"
 printf '[[ $- == *i* ]] && [ -x %s ] && %s --notify-shell\n' "$(shell_quote "$updater_file")" "$(shell_quote "$updater_file")"
-printf '[[ $- == *i* ]] && type welcomeBoardQuickSettings >/dev/null 2>&1 && welcomeBoardQuickSettings\n'
 printf '[[ $- == *i* ]] && printf '\''\\n'\''\n'
 
 if want_updater_cron; then

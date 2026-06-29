@@ -59,7 +59,7 @@ class WbCliTests(unittest.TestCase):
     def test_help_lists_safe_commands(self) -> None:
         result = run_wb("help")
         self.assertEqual(result.returncode, 0)
-        self.assertIn("wb animate", result.stdout)
+        self.assertNotIn("animate", result.stdout)
         self.assertIn("wb setup", result.stdout)
         self.assertIn("wb theme", result.stdout)
         self.assertIn("wb doctor", result.stdout)

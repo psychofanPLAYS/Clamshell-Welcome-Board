@@ -21,7 +21,6 @@ Do this:
    - custom commands or path shortcuts I want visible at a glance
    - service ports I intentionally run and want watched, as name:port pairs
    - whether I want optional Claude Code + Codex updater checks, using the default 4x/day cadence at 03:45, 09:45, 15:45, and 21:45
-   - whether I want to keep the default animated startup or set WB_ANIMATE=0 for a static board
    - whether I use Hermes; if yes, ask for my master command aliases such as m1, m1c, m1s, m1g, m1up, m1down, m1re, m2, m2c, m2s, m2g, m2up, m2down, and m2re
    - after install/setup, whether I want you to run a read-only review of running apps and listening ports with `wb ports explain` to see whether anything may be exposed
    - whether I want to create a reviewed port baseline with wb ports snapshot
@@ -31,7 +30,7 @@ Do this:
 7. If I gave custom commands, write them to a config file in the documented LABEL|command|hint format and point WB_CUSTOM_COMMANDS_FILE at it.
 8. Run wb help, wb theme, wb sections, and wb doctor so I know the commands work and the install is healthy.
 9. If I approved the read-only exposure review, run wb ports explain. Ask before running wb ports snapshot; snapshot is read-only but creates the reviewed warning baseline file.
-10. Run a render preview and check that text is centered where intended, color-coded by status, and aligned inside the frame. Pay special attention to the custom ASCII/banner art and the binary subtitle row because different machines may use different text. If animation is enabled, verify the board body appears after the intro rather than visibly producing itself section-by-section.
+10. Run a render preview and check that text is centered where intended, color-coded by status, and aligned inside the frame. Pay special attention to the custom ASCII/banner art and the binary subtitle row because different machines may use different text.
 11. Run the test command from README.md before calling the install done.
 12. Update `~/.config/welcome-board/INSTALL_NOTES.md` with what changed, verification results, and exact next action.
 

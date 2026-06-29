@@ -6,7 +6,7 @@ Linux + macOS, no daemons, no deps beyond a stock shell.
 
 ## Layout
 - `welcome-board.sh` — the board itself (~58K, sourced from `~/.bashrc`; also runs via `wb render`). All section logic lives here.
-- `bin/wb` — operator CLI (`wb`, `wb animate`, `wb doctor`, `wb ports explain|snapshot`); `bin/welcomeboard` thin wrapper.
+- `bin/wb` — operator CLI (`wb`, `wb doctor`, `wb ports explain|snapshot`); `bin/welcomeboard` thin wrapper.
 - `install.sh` — copies user-local files + prints shell-hook lines; **edits nothing itself**.
 - `tests/` — Python `unittest` suite; `skills/`, `prompts/` — agent install brief; `docs/` — SECTION_SDK, LLM_EXTENSION_GUIDE, security model.
 - Runtime config lives in `~/.config/welcome-board/config` (see `examples/config.example`), never in the repo.
