@@ -22,7 +22,7 @@ jobs:
         with:
           python-version: "3.x"
       - name: Shell syntax
-        run: bash -n welcome-board.sh bin/wb bin/welcomeboard install.sh
+        run: bash -n welcome-board.sh bin/wb bin/welcomeboard bin/clamshell-ssh-sessions bin/ssh-sessions bin/ssh-reap install.sh
       - name: Unit tests
         run: PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v
       - name: Install smoke
@@ -47,6 +47,6 @@ jobs:
           import os, pathlib, re
           text = pathlib.Path(os.environ["RENDER_PATH"]).read_text(errors="ignore")
           clean = re.sub(r"\x1B\[[0-9;]*m", "", text).replace("\x06", "")
-          for token in ("MACHINE", "NETWORK", "LOCAL AI", "SECURITY", "HERMES", "COMMANDS"):
+          for token in ("MACHINE", "NETWORK", "SECURITY", "SERVICES", "AUTOMATION", "HERMES", "COMMANDS"):
               assert token in clean, token
           PY
