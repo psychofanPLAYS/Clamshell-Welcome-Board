@@ -41,7 +41,7 @@
   │ clamsh xxxxxxxxx       · this machine                                        │
   │ laptop xxxxxxxxx       ● online                                              │
   │ server xxxxxxxxx       ● online                                              │
-  │ ssh    1 remote login(s) · clear ghosts → ssh-reap                           │
+  │ ssh    1 active · 0 stale · 0 auto-reaped today · reap ssh-reap              │
   │ tmux   2 session(s): work, agents                                            │
   │                                                                              │
   ├─ SECURITY ───────────────────────────────────────────────────────────────────┤

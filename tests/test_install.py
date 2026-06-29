@@ -36,6 +36,9 @@ class InstallTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((home / "bin" / "wb").exists())
             self.assertTrue((home / "bin" / "welcomeboard").exists())
+            self.assertTrue((home / "bin" / "clamshell-ssh-sessions").exists())
+            self.assertTrue((home / "bin" / "ssh-sessions").exists())
+            self.assertTrue((home / "bin" / "ssh-reap").exists())
             self.assertTrue((home / "share" / "welcome-board" / "welcome-board.sh").exists())
             self.assertTrue((home / "agents-bin" / "codex-claude-daily-update").exists())
             notes = home / "config" / "welcome-board" / "INSTALL_NOTES.md"

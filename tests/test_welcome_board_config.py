@@ -40,6 +40,17 @@ def _make_bin_dir(home: Path) -> Path:
         encoding="utf-8",
     )
 
+    # clamshell-ssh-sessions: deterministic structured SSH counter
+    (bin_dir / "clamshell-ssh-sessions").write_text(
+        "#!/usr/bin/env bash\n"
+        'if [ "${1:-}" = "summary" ] && [ "${2:-}" = "--format" ] && [ "${3:-}" = "env" ]; then\n'
+        "  printf 'SSH_TOTAL=3\\nSSH_ACTIVE=2\\nSSH_STALE=1\\nSSH_AUTO_REAPED_TODAY=4\\nSSH_TMUX=1\\nSSH_SHELL=1\\nSSH_PROTECTED=0\\nSSH_BUSY=0\\n'\n"
+        "  exit 0\n"
+        "fi\n"
+        "printf '2 active · 1 stale · 4 auto-reaped today\\n'\n",
+        encoding="utf-8",
+    )
+
     # ss: reports a few known ports so SERVICES can check them
     (bin_dir / "ss").write_text(
         "#!/usr/bin/env bash\n"
@@ -138,8 +149,10 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertNotIn("PRESSURE", rendered)
         self.assertNotIn("CLOCKS", rendered)
 
-        # ssh remote-logins row appears in NETWORK
-        self.assertIn("remote", rendered)
+        # ssh counter row appears in NETWORK with structured live/stale/reaped counts
+        self.assertIn("2 active", rendered)
+        self.assertIn("1 stale", rendered)
+        self.assertIn("4 auto-reaped today", rendered)
         # tmux row appears in NETWORK
         self.assertIn("tmux", rendered)
         # Hermes shortcuts use m1c / m2c shortcuts
@@ -278,8 +291,10 @@ class WelcomeBoardConfigTests(unittest.TestCase):
         self.assertIn("webdash", rendered)
         self.assertNotIn("shim dash", rendered)
 
-        # ssh remote-logins row
-        self.assertIn("remote", rendered)
+        # ssh counter row
+        self.assertIn("2 active", rendered)
+        self.assertIn("1 stale", rendered)
+        self.assertIn("4 auto-reaped today", rendered)
 
         # Hermes shortcuts appear
         self.assertTrue(

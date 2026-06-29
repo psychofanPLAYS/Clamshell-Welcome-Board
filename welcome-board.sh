@@ -271,6 +271,11 @@ __wb_safe_token() {
   s="$(__wb_safe_text "${1-}")"
   printf '%s' "${s:0:max}"
 }
+__wb_uint() {
+  local n="${1:-0}"
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  printf '%s' "$n"
+}
 # escape-aware clip: trims painted content to <= $2 VISIBLE columns, never cuts
 # mid-escape, appends a dim ellipsis. Overflow safety net so NO row breaks the frame.
 __wb_clip() {
@@ -391,14 +396,28 @@ __wb_bar() {
 }
 __wb_tcol() { local t="${1:-0}"; [[ "$t" =~ ^[0-9]+$ ]] || { printf '%s' "$WB_GRY"; return; }
   if ((t>=80)); then printf '%s' "$WB_RED"; elif ((t>=70)); then printf '%s' "$WB_YEL"; else printf '%s' "$WB_GRN"; fi; }
+__wb_cpu_load_fallback() {
+  awk -v n="$(nproc 2>/dev/null || echo 1)" '
+    { n=(n+0<1)?1:n; p=($1+0)/n*100; p=(p<0)?0:p; p=(p>100)?100:p; printf "%d", p }
+  ' /proc/loadavg 2>/dev/null || printf '0'
+}
 __wb_cpubusy() {
-  local t1 i1 t2 i2 dt di
+  local t1 i1 t2 i2 dt di delay
+  delay="$(__wb_seconds "${WB_CPU_SAMPLE_DELAY:-0.08}" 0.08)"
+  if [ "$delay" = 0 ] || [ ! -r /proc/stat ]; then
+    __wb_cpu_load_fallback
+    return
+  fi
   read -r t1 i1 < <(awk '/^cpu /{idle=$5+$6;tot=0;for(i=2;i<=NF;i++)tot+=$i;print tot,idle}' /proc/stat 2>/dev/null)
-  sleep 0.1 2>/dev/null
+  sleep "$delay" 2>/dev/null
   read -r t2 i2 < <(awk '/^cpu /{idle=$5+$6;tot=0;for(i=2;i<=NF;i++)tot+=$i;print tot,idle}' /proc/stat 2>/dev/null)
+  [[ "${t1:-}" =~ ^[0-9]+$ && "${i1:-}" =~ ^[0-9]+$ && "${t2:-}" =~ ^[0-9]+$ && "${i2:-}" =~ ^[0-9]+$ ]] || { __wb_cpu_load_fallback; return; }
   dt=$(( ${t2:-0}-${t1:-0} )); di=$(( ${i2:-0}-${i1:-0} ))
-  if ((dt>0)); then echo $(( (100*(dt-di))/dt ))
-  else awk -v n="$(nproc 2>/dev/null||echo 1)" '{p=$1/n*100;p=(p>100)?100:p;printf "%d",p}' /proc/loadavg 2>/dev/null; fi
+  if ((dt>0)); then
+    awk -v p="$(( (100*(dt-di))/dt ))" 'BEGIN{p=(p<0)?0:p; p=(p>100)?100:p; printf "%d", p}'
+  else
+    __wb_cpu_load_fallback
+  fi
 }
 
 # ---- MACHINE (Linux: full gauges; macOS: graceful subset) -------------------
@@ -874,18 +893,22 @@ __wb_machine() {
   cbrand=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | sed -E 's/.*: //; s/\(R\)//g; s/\(TM\)//g; s/Intel //; s/Core //; s/ CPU.*//; s/  */ /g; s/^ //'); : "${cbrand:=CPU}"
   cbrand="$(__wb_safe_token "$cbrand" 80)"
   cores=$(nproc 2>/dev/null || echo '?')
+  [[ "$cores" =~ ^[0-9]+$ ]] || cores=1
   ctemp=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | sort -n | tail -1); [ -n "$ctemp" ] && ctemp=$((ctemp/1000))
+  [[ "${ctemp:-}" =~ ^[0-9]+$ ]] || ctemp=""
   # live freq = fastest core right now (shows turbo under load; avg sits flat at base)
   cfcur=$(awk -F: '/cpu MHz/{v=$2+0; if(v>m)m=v} END{if(m)printf "%.2f",m/1000}' /proc/cpuinfo 2>/dev/null)
   [ -z "$cfcur" ] && cfcur=$(awk '$1>m{m=$1} END{if(m)printf "%.2f",m/1e6}' /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq 2>/dev/null)
   cfmax=$(awk '{printf "%.2f",$1/1e6}' /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null)
   cbusy=$(__wb_cpubusy)
+  cbusy="$(__wb_pct "$cbusy")"
   # RAM / SWAP
   local mu mtot rpct su stot spct ruGB rtGB suGB stGB
-  read -r mu mtot < <(free -m 2>/dev/null | awk '/^Mem:/{print $3,$2}')
+  read -r mu mtot < <(free -m 2>/dev/null | awk '/^Mem:/{u=($7 ~ /^[0-9]+$/)?$2-$7:$3; print u,$2}')
   [ -n "$mtot" ] && [ "$mtot" -gt 0 ] 2>/dev/null && rpct=$(( ${mu:-0}*100/mtot )) || rpct=0
   read -r su stot < <(free -m 2>/dev/null | awk '/^Swap:/{print $3,$2}')
   [ -n "$stot" ] && [ "$stot" -gt 0 ] 2>/dev/null && spct=$(( ${su:-0}*100/stot )) || spct=0
+  rpct="$(__wb_pct "$rpct")"; spct="$(__wb_pct "$spct")"
   ruGB=$(awk -v u="${mu:-0}" 'BEGIN{printf "%.1f",u/1024}'); rtGB=$(awk -v t="${mtot:-0}" 'BEGIN{printf "%.0f",t/1024}')
   suGB=$(awk -v u="${su:-0}" 'BEGIN{printf "%.1f",u/1024}'); stGB=$(awk -v t="${stot:-0}" 'BEGIN{printf "%.0f",t/1024}')
   # GPU
@@ -895,17 +918,19 @@ __wb_machine() {
   gname=$(printf '%s' "$gname" | sed -E 's/^ *//; s/NVIDIA //; s/GeForce //'); : "${gname:=no GPU}"
   gname="$(__wb_safe_token "$gname" 80)"
   for v in gp gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl; do printf -v "$v" '%s' "${!v// /}"; done
+  for v in gutil gtemp vu vt cgr cgrmax cm cmmax gpw gpl; do printf -v "$v" '%s' "${!v%.*}"; [[ "${!v}" =~ ^[0-9]+$ ]] || printf -v "$v" '0'; done
   [ -n "$vt" ] && [ "$vt" -gt 0 ] 2>/dev/null && vpct=$(( ${vu:-0}*100/vt )) || vpct=0
-  gpw=${gpw%.*}; gpl=${gpl%.*}
   [ -n "$gpl" ] && [ "$gpl" -gt 0 ] 2>/dev/null && ppct=$(( ${gpw:-0}*100/gpl )) || ppct=0
+  vpct="$(__wb_pct "$vpct")"; ppct="$(__wb_pct "$ppct")"
   gclk_pct=$(__wb_clock_pct "$cgr" "$cgrmax"); mclk_pct=$(__wb_clock_pct "$cm" "$cmmax")
   # DISK
   local du dt dp
   read -r du dt dp < <(df -BG --output=used,size,pcent / 2>/dev/null | tail -1 | tr -d 'G%')
+  dp="$(__wb_pct "$dp")"
   # LOAD
   local l1 l5 l15 lpct up
   read -r l1 l5 l15 _ < /proc/loadavg 2>/dev/null
-  lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{p=x/n*100;p=(p>100)?100:p;printf "%d",p}')
+  lpct=$(awk -v n="${cores:-1}" -v x="${l1:-0}" 'BEGIN{n=(n+0<1)?1:n;p=(x+0)/n*100;p=(p<0)?0:p;p=(p>100)?100:p;printf "%d",p}')
   up=$(uptime -p 2>/dev/null | sed 's/^up //;s/ hours\?/h/;s/ minutes\?/m/;s/ days\?/d/;s/ weeks\?/w/;s/,//g')
 
   # hardware names live in the group sub-headers; every metric row's VALUE starts in the
@@ -987,6 +1012,26 @@ __wb_peer_probe() {
   [ "$pport" -ge 1 ] 2>/dev/null && [ "$pport" -le 65535 ] 2>/dev/null || return 1
   __wb_run_timeout "$probe_timeout" bash -c 'exec 3<>"/dev/tcp/$1/$2"' bash "$phost" "$pport" 2>/dev/null
 }
+__wb_ssh_summary() {
+  local raw active stale reaped count timeout line
+  timeout="$(__wb_seconds "${WB_NETWORK_COMMAND_TIMEOUT:-0.45}" 0.45)"
+  if command -v clamshell-ssh-sessions >/dev/null 2>&1; then
+    raw=$(__wb_run_timeout "$timeout" clamshell-ssh-sessions summary --format env 2>/dev/null || true)
+    active="$(printf '%s\n' "$raw" | awk -F= '$1=="SSH_ACTIVE" {print $2; exit}')"
+    stale="$(printf '%s\n' "$raw" | awk -F= '$1=="SSH_STALE" {print $2; exit}')"
+    reaped="$(printf '%s\n' "$raw" | awk -F= '$1=="SSH_AUTO_REAPED_TODAY" {print $2; exit}')"
+    active="$(__wb_uint "$active")"
+    stale="$(__wb_uint "$stale")"
+    reaped="$(__wb_uint "$reaped")"
+    printf '%s active · %s stale · %s auto-reaped today\t%s\t%s\t%s\n' "$active" "$stale" "$reaped" "$active" "$stale" "$reaped"
+    return 0
+  fi
+
+  count=$(__wb_run_timeout "$timeout" who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)' || true)
+  count="$(__wb_uint "$count")"
+  line="${count} active · 0 stale · 0 auto-reaped today"
+  printf '%s\t%s\t0\t0\n' "$line" "$count"
+}
 __wb_network() {
   __wb_hdr "NETWORK"; __wb_zreset
   local nif nrx ntx npct
@@ -1018,14 +1063,19 @@ __wb_network() {
     __wb_zrow "${WB_LBL}$(printf '%-6s' "${shown_nm:0:6}")${WB_FR} ${WB_WHT}$(printf '%-16s' "$shown_ip")${WB_FR}${st}"
   done
   IFS="$IFS_SAVE"
-  local nssh sc ntmux tnames tmux_list
-  nssh=$(__wb_run_timeout "$(__wb_seconds "${WB_NETWORK_COMMAND_TIMEOUT:-0.45}" 0.45)" who 2>/dev/null | grep -cE '\([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\)'); : "${nssh:=0}"
-  sc=$WB_WHT; [ "${nssh:-0}" -ge 4 ] 2>/dev/null && sc=$WB_YEL
+  local nssh sc ntmux tnames tmux_list ssh_active ssh_stale ssh_reaped
+  IFS=$'\t' read -r nssh ssh_active ssh_stale ssh_reaped < <(__wb_ssh_summary)
+  nssh="$(__wb_safe_token "${nssh:-0 active · 0 stale · 0 auto-reaped today}" 120)"
+  ssh_active="$(__wb_uint "$ssh_active")"
+  ssh_stale="$(__wb_uint "$ssh_stale")"
+  sc=$WB_WHT
+  [ "$ssh_stale" -gt 0 ] 2>/dev/null && sc=$WB_RED
+  [ "$ssh_stale" -eq 0 ] 2>/dev/null && [ "$ssh_active" -ge 4 ] 2>/dev/null && sc=$WB_YEL
   tmux_list="$(__wb_run_timeout "$(__wb_seconds "${WB_NETWORK_COMMAND_TIMEOUT:-0.45}" 0.45)" tmux ls 2>/dev/null || true)"
   ntmux=$(printf '%s\n' "$tmux_list" | sed '/^$/d' | wc -l | tr -d ' '); : "${ntmux:=0}"
   tnames=$(printf '%s\n' "$tmux_list" | sed 's/:.*//' | paste -sd, - | sed 's/,/, /g')
   tnames="$(__wb_safe_token "$tnames" 180)"
-  __wb_zrow "${WB_LBL}$(printf '%-6s' 'ssh')${WB_FR} ${sc}${nssh}${WB_FR} ${WB_DM}remote login(s) · clear ghosts → ${WB_CYN}ssh-reap"
+  __wb_zrow "${WB_LBL}$(printf '%-6s' 'ssh')${WB_FR} ${sc}${nssh}${WB_FR} ${WB_DM}· reap ${WB_CYN}ssh-reap"
   if [ "${ntmux:-0}" -gt 0 ]; then
     __wb_zrow "${WB_LBL}$(printf '%-6s' 'tmux')${WB_FR} ${WB_WHT}${ntmux}${WB_FR} ${WB_DM}session(s): ${tnames}"
   else
@@ -1070,8 +1120,27 @@ __wb_commands() {
   fi
 }
 
-# --- FOOTER: killed (it only duplicated COMMANDS) ---------------------------
-__wb_footer() { :; }
+# --- FOOTER: updater notice below the board ---------------------------------
+__wb_footer() {
+  local notifier="" notice=""
+  if [ -n "${WELCOME_BOARD_UPDATE_NOTIFIER:-}" ] && [ -x "$WELCOME_BOARD_UPDATE_NOTIFIER" ]; then
+    notifier="$WELCOME_BOARD_UPDATE_NOTIFIER"
+  elif [ -x "$HOME/.local/share/welcome-board/codex-claude-daily-update" ]; then
+    notifier="$HOME/.local/share/welcome-board/codex-claude-daily-update"
+  elif command -v codex-claude-daily-update >/dev/null 2>&1; then
+    notifier="$(command -v codex-claude-daily-update)"
+  fi
+
+  if [ -n "$notifier" ]; then
+    notice="$("$notifier" --notify-shell 2>/dev/null || true)"
+  fi
+  if [ -n "$notice" ]; then
+    printf '%s\n' "$notice"
+    return 0
+  fi
+
+  return 0
+}
 
 # --- VARIANT A: classic gauge + 8-cell history spark, inline gold sub-headers
 WB_SPARK="▁▂▃▄▅▆▇█"; WB_SPARK_N=8
